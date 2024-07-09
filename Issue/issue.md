@@ -53,3 +53,9 @@ location ^~ / {
 
 #### 5、拉取镜像报错 `tls: failed to verify certificate: x509: certificate signed by unknown authority`
 - [x] **已知问题：** 证书问题。表示证书是由一个未知的或不受信任的证书颁发机构（CA）签发的。
+
+#### 6、通过docker-compose部署，如何设置Proxy认证
+- [x] **已知问题：** 查看教程：[自建Docker镜像加速服务](https://www.dqzboy.com/8709.html)
+
+#### 7、对于服务器的规格要求，内存、CPU、磁盘、带宽网络等
+- [x] **已知问题：** 建议最低使用1C1G的服务器，磁盘大小取决于你拉取镜像的频率以及保存镜像缓存的时长决定(默认缓存7天,部署时可自定义)；如果对拉取速度有要求，最好选择针对中国大陆进行网络优化的服务器
