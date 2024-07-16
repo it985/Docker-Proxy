@@ -79,6 +79,7 @@ PROXY_DIR="/data/registry-proxy"
 mkdir -p ${PROXY_DIR}
 cd "${PROXY_DIR}"
 
+
 GITRAW="https://raw.githubusercontent.com/dqzboy/Docker-Proxy/main"
 CNGITRAW="https://gitee.com/boydqz/Docker-Proxy/raw/main"
 
@@ -1266,26 +1267,12 @@ fi
 }
 
 
-function append_auth_config() {
-    local file=$1
-    local auth_config="
-
-auth:
-  htpasswd:
-    realm: basic-realm
-    path: /auth/htpasswd"
-
-    echo -e "$auth_config" | sudo tee -a "$file" > /dev/null
-
-    sed -ri "s@#- ./htpasswd:/auth/htpasswd@- ./htpasswd:/auth/htpasswd@g" ${PROXY_DIR}/docker-compose.yaml &>/dev/null
-}
-
 function update_docker_registry_url() {
     local container_name=$1
-    if [[ -f "${PROXY_DIR}/docker-compose.yaml" ]]; then
-        sed -ri "s@- DOCKER_REGISTRY_URL=http://reg-docker-hub:5000@- DOCKER_REGISTRY_URL=http://${container_name}:5000@g" ${PROXY_DIR}/docker-compose.yaml
+    if [[ -f "${PROXY_DIR}/${DOCKER_COMPOSE_FILE}" ]]; then
+        sed -ri "s@- DOCKER_REGISTRY_URL=http://reg-docker-hub:5000@- DOCKER_REGISTRY_URL=http://${container_name}:5000@g" ${PROXY_DIR}/${DOCKER_COMPOSE_FILE} 
     else
-        ERROR "文件 ${LIGHT_CYAN}${PROXY_DIR}/docker-compose.yaml${RESET} ${LIGHT_RED}不存在${RESET},导致容器无法应用新配置"
+        ERROR "文件 ${LIGHT_CYAN}${PROXY_DIR}/${DOCKER_COMPOSE_FILE} ${RESET} ${LIGHT_RED}不存在${RESET},导致容器无法应用新配置"
         exit 1
     fi
 }
@@ -1388,41 +1375,6 @@ function DOWN_CONFIG() {
         fi
     fi
 
-    WARN "${LIGHT_GREEN}>>> 提示:${RESET} ${LIGHT_CYAN}配置认证后,执行镜像拉取需先通过 docker login登入后使用.访问UI需输入账号密码${RESET}"
-    read -e -p "$(INFO "是否需要配置镜像仓库访问账号和密码? ${PROMPT_YES_NO}")" config_auth
-    while [[ "$config_auth" != "y" && "$config_auth" != "n" ]]; do
-        WARN "无效输入，请输入 ${LIGHT_GREEN}y${RESET} 或 ${LIGHT_YELLOW}n${RESET}"
-        read -e -p "$(INFO "是否需要配置镜像仓库访问账号和密码? ${PROMPT_YES_NO}")" config_auth
-    done
-
-    if [[ "$config_auth" == "y" ]]; then
-        while true; do
-
-            read -e -p "$(INFO "请输入账号名称: ")" username
-            if [[ -z "$username" ]]; then
-                ERROR "用户名不能为空。请重新输入"
-            else
-                break
-            fi
-        done
-
-        while true; do
-            read -e -p "$(INFO "请输入账号密码: ")" password
-            if [[ -z "$password" ]]; then
-                ERROR "密码不能为空。请重新输入"
-            else
-                break
-            fi
-        done
-
-        htpasswd -Bbn "$username" "$password" > ${PROXY_DIR}/htpasswd
-
-        for file_url in "${selected_files[@]}"; do
-            yml_name=$(basename "$file_url")
-            append_auth_config "${PROXY_DIR}/${yml_name}"
-        done
-    fi
-
     WARN "${LIGHT_GREEN}>>> 提示:${RESET} ${LIGHT_BLUE}Proxy代理缓存过期时间${RESET} ${MAGENTA}单位:ns、us、ms、s、m、h.默认ns,0表示禁用${RESET}"
     read -e -p "$(INFO "是否要修改缓存时间? ${PROMPT_YES_NO}")" modify_cache
     while [[ "$modify_cache" != "y" && "$modify_cache" != "n" ]]; do
@@ -1453,8 +1405,8 @@ case $modify_config in
       WARN "代理${LIGHT_YELLOW}地址不能为空${RESET}，请重新输入!"
       read -e -p "$(INFO "输入代理地址 ${LIGHT_MAGENTA}(eg: host:port)${RESET}: ")" url
     done
-    sed -i "s@#- http=http://host:port@- http_proxy=http://${url}@g" ${PROXY_DIR}/docker-compose.yaml
-    sed -i "s@#- https=http://host:port@- https_proxy=http://${url}@g" ${PROXY_DIR}/docker-compose.yaml
+    sed -i "s@#- http=http://host:port@- http_proxy=http://${url}@g" ${PROXY_DIR}/${DOCKER_COMPOSE_FILE} 
+    sed -i "s@#- https=http://host:port@- https_proxy=http://${url}@g" ${PROXY_DIR}/${DOCKER_COMPOSE_FILE} 
 
     INFO "你配置代理地址为: ${CYAN}http://${url}${RESET}"
     ;;
@@ -1494,6 +1446,18 @@ case $modify_proxy in
 esac
 }
 
+function CHECK_DOCKER_PROXY() {
+    local url=$1
+    local http_proxy=$(docker info 2>/dev/null | grep -i "HTTP Proxy" | awk -F ': ' '{print $2}')
+    local https_proxy=$(docker info 2>/dev/null | grep -i "HTTPS Proxy" | awk -F ': ' '{print $2}')
+
+    if [[ "$http_proxy" == "http://$url" && "$https_proxy" == "http://$url" ]]; then
+        INFO "Docker 代理${LIGHT_GREEN}配置成功${RESET}，当前 HTTP Proxy: ${LIGHT_CYAN}$http_proxy${RESET}, HTTPS Proxy: ${LIGHT_CYAN}$https_proxy${RESET}"
+    else
+        ERROR "Docker 代理${LIGHT_RED}配置失败${RESET}，请检查配置并重新执行配置"
+        DOCKER_PROXY_HTTP
+    fi
+}
 
 function ADD_DOCKERD_PROXY() {
 mkdir -p /etc/systemd/system/docker.service.d
@@ -1528,21 +1492,8 @@ EOF
 fi
 }
 
-function CHECK_DOCKER_PROXY() {
-    local url=$1
-    local http_proxy=$(docker info 2>/dev/null | grep -i "HTTP Proxy" | awk -F ': ' '{print $2}')
-    local https_proxy=$(docker info 2>/dev/null | grep -i "HTTPS Proxy" | awk -F ': ' '{print $2}')
 
-    if [[ "$http_proxy" == "http://$url" && "$https_proxy" == "http://$url" ]]; then
-        INFO "Docker 代理${LIGHT_GREEN}配置成功${RESET}，当前 HTTP Proxy: ${LIGHT_CYAN}$http_proxy${RESET}, HTTPS Proxy: ${LIGHT_CYAN}$https_proxy${RESET}"
-    else
-        ERROR "Docker 代理${LIGHT_RED}配置失败${RESET}，请检查配置并重新执行配置"
-        DOCKER_PROXY_HTTP
-    fi
-}
-
-
-
+# 一键部署时调用START_CONTAINER
 function START_CONTAINER() {
     if [ "$modify_config" = "y" ] || [ "$modify_config" = "Y" ]; then
         ADD_DOCKERD_PROXY
@@ -1550,18 +1501,41 @@ function START_CONTAINER() {
         INFO "拉取服务镜像并启动服务中，请稍等..."
     fi
 
+    # DOWN_CONFIG函数执行后判断selected_all变量
     if [ "$selected_all" = true ]; then
         docker-compose up -d --force-recreate
+        # 检查命令执行是否成功
+        if [ $? -ne 0 ]; then
+          ERROR "Docker 容器启动失败,请通过查看日志确认启动失败原因"
+          exit 1
+        fi
     else
         docker-compose up -d "${selected_names[@]}" registry-ui
+        # 检查命令执行是否成功
+        if [ $? -ne 0 ]; then
+          ERROR "Docker 容器启动失败,请通过查看日志确认启动失败原因"
+          exit 1
+        fi
     fi
 }
 
+# 使用函数UPDATE_CONFIG时调用RESTART_CONTAINER
 function RESTART_CONTAINER() {
+    # DOWN_CONFIG函数执行后判断selected_all变量
     if [ "$selected_all" = true ]; then
         docker-compose restart
+        # 检查命令执行是否成功
+        if [ $? -ne 0 ]; then
+          ERROR "Docker 容器启动失败,请通过查看日志确认启动失败原因"
+          exit 1
+        fi
     else
         docker-compose restart "${selected_names[@]}"
+        # 检查命令执行是否成功
+        if [ $? -ne 0 ]; then
+          ERROR "Docker 容器启动失败,请通过查看日志确认启动失败原因"
+          exit 1
+        fi
     fi
 }
 
@@ -1569,9 +1543,9 @@ function INSTALL_DOCKER_PROXY() {
 SEPARATOR "部署Docker Proxy"
 CONFIG_FILES
 if [[ "$install_docker_reg" == "1" ]]; then
-    wget -NP ${PROXY_DIR}/ ${GITRAW}/docker-compose.yaml &>/dev/null
+    wget -NP ${PROXY_DIR}/ ${GITRAW}/${DOCKER_COMPOSE_FILE} &>/dev/null
 elif [[ "$install_docker_reg" == "2" ]]; then
-    wget -NP ${PROXY_DIR}/ ${CNGITRAW}/docker-compose.yaml &>/dev/null
+    wget -NP ${PROXY_DIR}/ ${CNGITRAW}/${DOCKER_COMPOSE_FILE}  &>/dev/null
 fi
 DOWN_CONFIG
 PROXY_HTTP
@@ -1584,7 +1558,7 @@ function STOP_REMOVE_CONTAINER() {
         INFO "停止和移除所有容器"
         docker-compose -f "${PROXY_DIR}/${DOCKER_COMPOSE_FILE}" down --remove-orphans
     else 
-        WARN "${LIGHT_YELLOW}容器未运行，无需删除${RESET}"
+        WARN "${LIGHT_YELLOW}容器目前未处于运行状态，无需进行删除操作！${RESET}"
         exit 1
     fi
 }
@@ -1672,128 +1646,6 @@ done
 }
 
 
-function RESTART_SERVICE() {
-    services=(
-        "dockerhub"
-        "gcr"
-        "ghcr"
-        "quay"
-        "k8sgcr"
-        "k8s"
-        "mcr"
-        "elastic"
-    )
-
-    selected_services=()
-
-    WARN "重启服务请在${LIGHT_GREEN}docker-compose.yaml${RESET}文件存储目录下执行脚本.默认安装路径: ${LIGHT_BLUE}${PROXY_DIR}${RESET}"
-    echo -e "${YELLOW}-------------------------------------------------${RESET}"
-    echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
-    echo -e "${GREEN}2)${RESET} ${BOLD}gcr${RESET}"
-    echo -e "${GREEN}3)${RESET} ${BOLD}ghcr${RESET}"
-    echo -e "${GREEN}4)${RESET} ${BOLD}quay${RESET}"
-    echo -e "${GREEN}5)${RESET} ${BOLD}k8s-gcr${RESET}"
-    echo -e "${GREEN}6)${RESET} ${BOLD}k8s${RESET}"
-    echo -e "${GREEN}7)${RESET} ${BOLD}mcr${RESET}"
-    echo -e "${GREEN}8)${RESET} ${BOLD}elastic${RESET}"
-    echo -e "${GREEN}9)${RESET} ${BOLD}all${RESET}"
-    echo -e "${GREEN}0)${RESET} ${BOLD}exit${RESET}"
-    echo -e "${YELLOW}-------------------------------------------------${RESET}"
-
-    read -e -p "$(INFO "输入序号选择对应服务,${LIGHT_YELLOW}空格分隔${RESET}多个选项. ${LIGHT_CYAN}all选择所有${RESET} > ")"  restart_service
-
-    if [[ "$restart_service" == "9" ]]; then
-        for service_name in "${services[@]}"; do
-            if docker-compose ps --services | grep -q "^${service_name}$"; then
-                selected_services+=("$service_name")               
-            else
-                WARN "服务 ${service_name}未运行，跳过重启。"
-            fi
-        done
-        INFO "重启的服务: ${selected_services[*]}"
-    elif [[ "$restart_service" == "0" ]]; then
-        WARN "退出重启服务!"
-        exit 1
-    else
-        for choice in ${restart_service}; do
-            if [[ $choice =~ ^[0-9]+$ ]] && ((choice >0 && choice <= ${#services[@]})); then
-                service_name="${services[$((choice -1))]}"
-                if docker-compose ps --services | grep -q "^${service_name}$"; then
-                    selected_services+=("$service_name")
-                    INFO "重启的服务: ${selected_services[*]}"
-                else
-                    WARN "服务 ${service_name} 未运行，跳过重启。"
-                    
-                fi
-            else
-                ERROR "无效的选择: $choice. 请重新${LIGHT_GREEN}选择0-9${RESET}的选项" 
-                RESTART_SERVICE
-            fi
-        done
-    fi
-}
-
-function UPDATE_SERVICE() {
-    services=(
-        "dockerhub"
-        "gcr"
-        "ghcr"
-        "quay"
-        "k8sgcr"
-        "k8s"
-        "mcr"
-        "elastic"
-    )
-
-    selected_services=()
-
-    WARN "更新服务请在${LIGHT_GREEN}docker-compose.yaml${RESET}文件存储目录下执行脚本.默认安装路径: ${LIGHT_BLUE}${PROXY_DIR}${RESET}"
-    echo -e "${YELLOW}-------------------------------------------------${RESET}"
-    echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
-    echo -e "${GREEN}2)${RESET} ${BOLD}gcr${RESET}"
-    echo -e "${GREEN}3)${RESET} ${BOLD}ghcr${RESET}"
-    echo -e "${GREEN}4)${RESET} ${BOLD}quay${RESET}"
-    echo -e "${GREEN}5)${RESET} ${BOLD}k8s-gcr${RESET}"
-    echo -e "${GREEN}6)${RESET} ${BOLD}k8s${RESET}"
-    echo -e "${GREEN}7)${RESET} ${BOLD}mcr${RESET}"
-    echo -e "${GREEN}8)${RESET} ${BOLD}elastic${RESET}"
-    echo -e "${GREEN}9)${RESET} ${BOLD}all${RESET}"
-    echo -e "${GREEN}0)${RESET} ${BOLD}exit${RESET}"
-    echo -e "${YELLOW}-------------------------------------------------${RESET}"
-
-    read -e -p "$(INFO "输入序号选择对应服务,${LIGHT_YELLOW}空格分隔${RESET}多个选项. ${LIGHT_CYAN}all选择所有${RESET} > ")"  choices_service
-
-    if [[ "$choices_service" == "9" ]]; then
-        for service_name in "${services[@]}"; do
-            if docker-compose ps --services | grep -q "^${service_name}$"; then
-                selected_services+=("$service_name")               
-            else
-                WARN "服务 ${service_name}未运行，跳过更新。"
-            fi
-        done
-        INFO "更新的服务: ${selected_services[*]}"
-    elif [[ "$choices_service" == "0" ]]; then
-        WARN "退出更新服务!"
-        exit 1
-    else
-        for choice in ${choices_service}; do
-            if [[ $choice =~ ^[0-9]+$ ]] && ((choice >0 && choice <= ${#services[@]})); then
-                service_name="${services[$((choice -1))]}"
-                if docker-compose ps --services | grep -q "^${service_name}$"; then
-                    selected_services+=("$service_name")
-                    INFO "更新的服务: ${selected_services[*]}"
-                else
-                    WARN "服务 ${service_name} 未运行，跳过更新。"
-                    
-                fi
-            else
-                ERROR "无效的选择: $choice. 请重新${LIGHT_GREEN}选择0-9${RESET}的选项"
-                UPDATE_SERVICE
-            fi
-        done
-    fi
-}
-
 
 function PROMPT(){
 PUBLIC_IP=$(curl -s https://ifconfig.me)
@@ -1813,7 +1665,7 @@ INFO "作者博客: https://dqzboy.com"
 INFO "技术交流: https://t.me/dqzboyblog"
 INFO "代码仓库: https://github.com/dqzboy/Docker-Proxy"
 INFO  
-INFO "如果使用的是云服务器，且配置了域名与证书，请至安全组开放80、443端口；否则开放对应服务的监听端口"
+INFO "若用云服务器并设域名及证书，需在安全组开放80、443端口；否则开放对应服务监听端口"
 INFO
 INFO "================================================================"
 }
@@ -1883,7 +1735,6 @@ case $proxy_install in
         ;;
 esac
 }
-
 
 
 function COMP_INST() {
@@ -1984,6 +1835,323 @@ esac
 }
 
 
+function SVC_MGMT() {
+# 定义Docker容器服务名称
+CONTAINER_SERVICES() {
+    services=(
+        "dockerhub"
+        "gcr"
+        "ghcr"
+        "quay"
+        "k8sgcr"
+        "k8s"
+        "mcr"
+        "elastic"
+    )
+}
+
+RESTART_SERVICE() {
+    CONTAINER_SERVICES
+
+    selected_services=()
+
+    WARN "重启服务请在${LIGHT_GREEN}${DOCKER_COMPOSE_FILE}${RESET}文件存储目录下执行脚本.默认安装路径: ${LIGHT_BLUE}${PROXY_DIR}${RESET}"
+    echo -e "${YELLOW}-------------------------------------------------${RESET}"
+    echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
+    echo -e "${GREEN}2)${RESET} ${BOLD}gcr${RESET}"
+    echo -e "${GREEN}3)${RESET} ${BOLD}ghcr${RESET}"
+    echo -e "${GREEN}4)${RESET} ${BOLD}quay${RESET}"
+    echo -e "${GREEN}5)${RESET} ${BOLD}k8s-gcr${RESET}"
+    echo -e "${GREEN}6)${RESET} ${BOLD}k8s${RESET}"
+    echo -e "${GREEN}7)${RESET} ${BOLD}mcr${RESET}"
+    echo -e "${GREEN}8)${RESET} ${BOLD}elastic${RESET}"
+    echo -e "${GREEN}9)${RESET} ${BOLD}all${RESET}"
+    echo -e "${GREEN}0)${RESET} ${BOLD}exit${RESET}"
+    echo -e "${YELLOW}-------------------------------------------------${RESET}"
+
+    read -e -p "$(INFO "输入序号选择对应服务,${LIGHT_YELLOW}空格分隔${RESET}多个选项. ${LIGHT_CYAN}all选择所有${RESET} > ")"  restart_service
+
+    if [[ "$restart_service" == "9" ]]; then
+        for service_name in "${services[@]}"; do
+            if docker-compose ps --services 2>/dev/null | grep -q "^${service_name}$"; then
+                selected_services+=("$service_name")               
+            else
+                WARN "服务 ${service_name}未运行，跳过重启。"
+            fi
+        done
+        INFO "重启的服务: ${selected_services[*]}"
+    elif [[ "$restart_service" == "0" ]]; then
+        WARN "退出重启服务!"
+        exit 1
+    else
+        for choice in ${restart_service}; do
+            if [[ $choice =~ ^[0-9]+$ ]] && ((choice >0 && choice <= ${#services[@]})); then
+                service_name="${services[$((choice -1))]}"
+                if docker-compose ps --services 2>/dev/null | grep -q "^${service_name}$"; then
+                    selected_services+=("$service_name")                  
+                else
+                    WARN "服务 ${service_name} 未运行，跳过重启。"
+                    
+                fi
+            else
+                ERROR "无效的选择: $choice. 请重新${LIGHT_GREEN}选择0-9${RESET}的选项" 
+                RESTART_SERVICE # 选择无效重新调用当前函数进行选择
+            fi
+        done
+        INFO "重启的服务: ${selected_services[*]}"
+    fi
+}
+
+UPDATE_SERVICE() {
+    CONTAINER_SERVICES
+
+    selected_services=()
+
+    WARN "更新服务请在${LIGHT_GREEN}${DOCKER_COMPOSE_FILE}${RESET}文件存储目录下执行脚本.默认安装路径: ${LIGHT_BLUE}${PROXY_DIR}${RESET}"
+    echo -e "${YELLOW}-------------------------------------------------${RESET}"
+    echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
+    echo -e "${GREEN}2)${RESET} ${BOLD}gcr${RESET}"
+    echo -e "${GREEN}3)${RESET} ${BOLD}ghcr${RESET}"
+    echo -e "${GREEN}4)${RESET} ${BOLD}quay${RESET}"
+    echo -e "${GREEN}5)${RESET} ${BOLD}k8s-gcr${RESET}"
+    echo -e "${GREEN}6)${RESET} ${BOLD}k8s${RESET}"
+    echo -e "${GREEN}7)${RESET} ${BOLD}mcr${RESET}"
+    echo -e "${GREEN}8)${RESET} ${BOLD}elastic${RESET}"
+    echo -e "${GREEN}9)${RESET} ${BOLD}all${RESET}"
+    echo -e "${GREEN}0)${RESET} ${BOLD}exit${RESET}"
+    echo -e "${YELLOW}-------------------------------------------------${RESET}"
+
+    read -e -p "$(INFO "输入序号选择对应服务,${LIGHT_YELLOW}空格分隔${RESET}多个选项. ${LIGHT_CYAN}all选择所有${RESET} > ")"  choices_service
+
+    if [[ "$choices_service" == "9" ]]; then
+        for service_name in "${services[@]}"; do
+            if docker-compose ps --services 2>/dev/null | grep -q "^${service_name}$"; then
+                selected_services+=("$service_name")               
+            else
+                WARN "服务 ${service_name}未运行，跳过更新。"
+            fi
+        done
+        INFO "更新的服务: ${selected_services[*]}"
+    elif [[ "$choices_service" == "0" ]]; then
+        WARN "退出更新服务!"
+        exit 1
+    else
+        for choice in ${choices_service}; do
+            if [[ $choice =~ ^[0-9]+$ ]] && ((choice >0 && choice <= ${#services[@]})); then
+                service_name="${services[$((choice -1))]}"
+                if docker-compose ps --services 2>/dev/null | grep -q "^${service_name}$"; then
+                    selected_services+=("$service_name")
+                else
+                    WARN "服务 ${service_name} 未运行，跳过更新。"
+                    
+                fi
+            else
+                ERROR "无效的选择: $choice. 请重新${LIGHT_GREEN}选择0-9${RESET}的选项"
+                UPDATE_SERVICE # 选择无效重新调用当前函数进行选择
+            fi
+        done
+        INFO "更新的服务: ${selected_services[*]}"
+    fi
+}
+
+
+CONTAIENR_LOGS() {
+    CONTAINER_SERVICES
+
+    selected_services=()
+
+    echo -e "${YELLOW}-------------------------------------------------${RESET}"
+    echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
+    echo -e "${GREEN}2)${RESET} ${BOLD}gcr${RESET}"
+    echo -e "${GREEN}3)${RESET} ${BOLD}ghcr${RESET}"
+    echo -e "${GREEN}4)${RESET} ${BOLD}quay${RESET}"
+    echo -e "${GREEN}5)${RESET} ${BOLD}k8s-gcr${RESET}"
+    echo -e "${GREEN}6)${RESET} ${BOLD}k8s${RESET}"
+    echo -e "${GREEN}7)${RESET} ${BOLD}mcr${RESET}"
+    echo -e "${GREEN}8)${RESET} ${BOLD}elastic${RESET}"
+    echo -e "${GREEN}0)${RESET} ${BOLD}exit${RESET}"
+    echo -e "${YELLOW}-------------------------------------------------${RESET}"
+
+    read -e -p "$(INFO "输入序号选择对应服务,${LIGHT_YELLOW}空格分隔${RESET}多个选项. ${LIGHT_CYAN}all选择所有${RESET} > ")"  restart_service
+
+    if  [[ "$restart_service" == "0" ]]; then
+        WARN "退出查看容器服务日志操作!"
+        exit 1
+    else
+        for choice in ${restart_service}; do
+            if [[ $choice =~ ^[0-9]+$ ]] && ((choice >0 && choice <= ${#services[@]})); then
+                service_name="${services[$((choice -1))]}"
+                if docker-compose ps --services 2>/dev/null | grep -q "^${service_name}$"; then
+                    selected_services+=("$service_name")
+                else
+                    WARN "服务 ${service_name} 未运行，无法查看容器日志。"
+                fi
+            else
+                ERROR "无效的选择: $choice. 请重新${LIGHT_GREEN}选择0-8${RESET}的选项" 
+                CONTAIENR_LOGS # 选择无效重新调用当前函数进行选择
+            fi
+        done
+        INFO "查看日志的服务: ${selected_services[*]}"
+    fi
+}
+
+
+MODIFY_SERVICE_CONFIG() {
+    selected_services=()
+    selected_files=()
+    existing_files=()
+    non_existing_files=()
+
+    files=(
+        "dockerhub registry-hub.yml"
+        "gcr registry-gcr.yml"
+        "ghcr registry-ghcr.yml"
+        "quay registry-quay.yml"
+        "k8sgcr registry-k8sgcr.yml"
+        "k8s registry-k8s.yml"
+        "mcr registry-mcr.yml"
+        "elastic registry-elastic.yml"
+    )
+
+    while true; do
+        echo -e "${YELLOW}-------------------------------------------------${RESET}"
+        echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
+        echo -e "${GREEN}2)${RESET} ${BOLD}gcr${RESET}"
+        echo -e "${GREEN}3)${RESET} ${BOLD}ghcr${RESET}"
+        echo -e "${GREEN}4)${RESET} ${BOLD}quay${RESET}"
+        echo -e "${GREEN}5)${RESET} ${BOLD}k8s-gcr${RESET}"
+        echo -e "${GREEN}6)${RESET} ${BOLD}k8s${RESET}"
+        echo -e "${GREEN}7)${RESET} ${BOLD}mcr${RESET}"
+        echo -e "${GREEN}8)${RESET} ${BOLD}elastic${RESET}"
+        echo -e "${GREEN}0)${RESET} ${BOLD}exit${RESET}"
+        echo -e "${YELLOW}-------------------------------------------------${RESET}"
+
+        read -e -p "$(INFO "输入序号修改服务对应配置文件,${LIGHT_YELLOW}空格分隔${RESET}多个选项 > ")" ttl_service
+        if [[ "$ttl_service" == "0" ]]; then
+            WARN "退出修改容器服务配置操作!"
+            return
+        elif [[ "$ttl_service" =~ ^([1-8]+[[:space:]]*)+$ ]]; then
+            break
+        else
+            WARN "无效输入，请重新输入${LIGHT_YELLOW} 0-8 ${RESET}序号"
+        fi
+    done
+
+    for choice in ${ttl_service}; do
+        file_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f2)
+        service_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f1)
+        selected_files+=("$file_name")
+
+        # 检查文件是否存在
+        if [ -f "${PROXY_DIR}/${file_name}" ]; then
+            existing_files+=("$file_name")
+            selected_services+=("$service_name")
+        else
+            non_existing_files+=("$file_name")
+        fi
+        
+        # 检查服务是否运行
+        if ! docker-compose ps --services 2>/dev/null | grep -q "^${service_name}$"; then
+            WARN "服务 ${service_name} 未运行。"
+        fi
+    done
+
+    if [ ${#existing_files[@]} -gt 0 ]; then
+        INFO "${GREEN}存在的配置文件:${RESET} ${existing_files[*]}${RESET}"
+    fi
+
+    if [ ${#non_existing_files[@]} -gt 0 ]; then
+        WARN "${RED}不存在的配置文件:${RESET} ${non_existing_files[*]}"
+    fi
+
+    if [ ${#existing_files[@]} -gt 0 ]; then
+        WARN "${LIGHT_GREEN}>>> 提示:${RESET} ${LIGHT_BLUE}Proxy代理缓存过期时间${RESET} ${MAGENTA}单位:ns、us、ms、s、m、h.默认ns,0表示禁用${RESET}"
+        read -e -p "$(INFO "是否要修改缓存时间? ${PROMPT_YES_NO}")" modify_cache
+        while [[ "$modify_cache" != "y" && "$modify_cache" != "n" ]]; do
+            WARN "无效输入，请输入 ${LIGHT_GREEN}y${RESET} 或 ${LIGHT_YELLOW}n${RESET}"
+            read -e -p "$(INFO "是否要修改缓存时间? ${PROMPT_YES_NO}")" modify_cache
+        done
+
+        if [[ "$modify_cache" == "y" ]]; then
+            while true; do
+                read -e -p "$(INFO "请输入新的缓存时间值: ")" new_ttl
+                for file_url in "${existing_files[@]}"; do
+                    yml_name=$(basename "$file_url")
+                    WARN "${YELLOW}正在修改配置文件: ${PROXY_DIR}/${yml_name}${RESET}"
+                    sed -i "s/ttl: .*/ttl: ${new_ttl}/g" "${PROXY_DIR}/${yml_name}" &>/dev/null
+                    INFO "${GREEN}配置文件 ${yml_name} 修改完成，代理缓存过期时间已设置为: ${new_ttl}${RESET}"
+                done
+                break
+            done
+        fi
+    else
+        WARN "未选择有效的配置文件进行修改。"
+    fi
+}
+
+
+SEPARATOR "服务管理"
+echo -e "1) ${BOLD}${LIGHT_GREEN}重启${RESET}服务"
+echo -e "2) ${BOLD}${LIGHT_CYAN}更新${RESET}服务"
+echo -e "3) ${BOLD}${LIGHT_MAGENTA}查看${RESET}日志"
+echo -e "4) ${BOLD}${LIGHT_BLUE}缓存${RESET}时效"
+echo -e "5) ${BOLD}返回${LIGHT_RED}主菜单${RESET}"
+echo -e "0) ${BOLD}退出脚本${RESET}"
+echo "---------------------------------------------------------------"
+read -e -p "$(INFO "输入${LIGHT_CYAN}对应数字${RESET}并按${LIGHT_GREEN}Enter${RESET}键 > ")" ser_choice
+
+case $ser_choice in
+    1)
+        RESTART_SERVICE
+        if [ ${#selected_services[@]} -eq 0 ]; then
+            ERROR "没有需要重启的服务,请重新选择"
+            RESTART_SERVICE
+        else
+            docker-compose stop ${selected_services[*]}
+            docker-compose up -d --force-recreate ${selected_services[*]}
+        fi
+        SVC_MGMT
+        ;;
+    2)
+        UPDATE_SERVICE
+        if [ ${#selected_services[@]} -eq 0 ]; then
+            ERROR "没有需要更新的服务,请重新选择"
+            UPDATE_SERVICE
+        else
+            docker-compose pull ${selected_services[*]}
+            docker-compose up -d --force-recreate ${selected_services[*]}
+        fi
+        SVC_MGMT
+        ;;
+    3)
+        CONTAIENR_LOGS
+        if [ ${#selected_services[@]} -eq 0 ]; then
+            ERROR "没有需要查看的服务,请重新选择"
+            CONTAIENR_LOGS
+        else
+            # 查看最近30条日志
+            docker-compose logs --tail=30 ${selected_services[*]}
+        fi
+        SVC_MGMT
+        ;;
+    4)
+        MODIFY_SERVICE_CONFIG
+        SVC_MGMT
+        ;;
+    5)
+        main_menu
+        ;;
+    0)
+        exit 1
+        ;;
+    *)
+        WARN "输入了无效的选择。请重新${LIGHT_GREEN}选择0-5${RESET}的选项."
+        SVC_MGMT
+        ;;
+esac
+}
+
+
 function ADD_SYS_CMD() {
 MAX_ATTEMPTS=3
 attempt=0
@@ -2049,12 +2217,10 @@ case $cmd_choice in
     1)
         INSTALL_ENV
         INSTALL_OR_UPDATE_CMD "安装"
-        ADD_SYS_CMD
         ;;
     2)
         INSTALL_ENV
         INSTALL_OR_UPDATE_CMD "更新"
-        ADD_SYS_CMD
         ;;
     3)
         main_menu
@@ -2072,6 +2238,7 @@ esac
 
 function UNI_DOCKER_SERVICE() {
 RM_SERVICE() {
+
 selected_containers=()
 
 files=(
@@ -2084,7 +2251,6 @@ files=(
     "mcr registry-mcr.yml"
     "elastic registry-elastic.yml"
 )
-
 
 echo -e "${YELLOW}-------------------------------------------------${RESET}"
 echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
@@ -2104,37 +2270,40 @@ while [[ ! "$rm_service" =~ ^([0-8]+[[:space:]]*)+$ ]]; do
     read -e -p "$(INFO "输入序号删除服务和对应配置文件,${LIGHT_YELLOW}空格分隔${RESET}多个选项 > ")" rm_service
 done
 
-
 if [[ "$rm_service" == "0" ]]; then
     WARN "退出删除容器服务操作!"
     return
 else
+    selected_services=()
     for choice in ${rm_service}; do
         if [[ $choice =~ ^[0-8]+$ ]] && ((choice > 0 && choice <= ${#files[@]})); then
             file_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f2)
             service_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f1)
             
-            # 检查服务是否运行，并删除容器
-            if docker-compose ps --services | grep -q "^${service_name}$"; then
+            if docker-compose ps --services 2>/dev/null | grep -q "^${service_name}$"; then
                 selected_services+=("$service_name")
-                INFO "删除的服务: ${selected_services[*]}"
-                docker-compose down ${selected_services[*]}
             else
-                WARN "服务 ${service_name} 未运行，但将尝试删除相关文件。"
+                WARN "服务 ${LIGHT_MAGENTA}${service_name} 未运行${RESET}，但将尝试删除相关文件。"
             fi
             
-            # 检查文件是否存在，并删除文件
             if [ -f "${PROXY_DIR}/${file_name}" ]; then
                 rm -f "${PROXY_DIR}/${file_name}"
-                INFO "配置文件 ${file_name} 已被删除。"
+                INFO "配置文件 ${LIGHT_CYAN}${file_name}${RESET} ${LIGHT_GREEN}已被删除${RESET}"
             else
-                WARN "配置文件 ${file_name} 不存在，无需删除。"
+                WARN "配置文件 ${LIGHT_CYAN}${file_name}${RESET} 不存在,${LIGHT_YELLOW}无需删除${RESET}"
             fi
         else
             WARN "无效输入，请重新输入${LIGHT_YELLOW} 0-8 ${RESET}序号"
-            RM_SERVICE
+            UNI_DOCKER_SERVICE
+            return
         fi
     done
+
+    # 一次性删除所有选中的服务
+    if [ ${#selected_services[@]} -gt 0 ]; then
+        INFO "删除的服务: ${LIGHT_RED}${selected_services[*]}${RESET}"
+        docker-compose down ${selected_services[*]}
+    fi
 fi
 }
 
@@ -2150,8 +2319,8 @@ fi
 if [ -f "/usr/bin/hub" ]; then
     rm -f /usr/bin/hub &>/dev/null
 fi
-INFO "${LIGHT_YELLOW}服务已经卸载,感谢你的使用!${RESET}"
-SEPARATOR "=========="
+INFO "${LIGHT_YELLOW}感谢您的使用，Docker-Proxy服务已卸载。欢迎您再次使用！${RESET}"
+SEPARATOR "DONE"
 }
 
 CONFIREM_ACTION() {
@@ -2185,7 +2354,6 @@ read -e -p "$(INFO "输入${LIGHT_CYAN}对应数字${RESET}并按${LIGHT_GREEN}E
 case $rm_choice in
     1)
         CONFIREM_ACTION "卸载所有" RM_ALLSERVICE
-        UNI_DOCKER_SERVICE
         ;;
     2)
         CONFIREM_ACTION "删除指定" RM_SERVICE
@@ -2205,6 +2373,277 @@ esac
 }
 
 
+function AUTH_SERVICE_CONFIG() {
+
+AUTH_MENU() {
+selected_files=()
+selected_services=()
+files=(
+    "dockerhub registry-hub.yml"
+    "gcr registry-gcr.yml"
+    "ghcr registry-ghcr.yml"
+    "quay registry-quay.yml"
+    "k8sgcr registry-k8sgcr.yml"
+    "k8s registry-k8s.yml"
+    "mcr registry-mcr.yml"
+    "elastic registry-elastic.yml"
+)
+
+echo -e "${YELLOW}-------------------------------------------------${RESET}"
+echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
+echo -e "${GREEN}2)${RESET} ${BOLD}gcr${RESET}"
+echo -e "${GREEN}3)${RESET} ${BOLD}ghcr${RESET}"
+echo -e "${GREEN}4)${RESET} ${BOLD}quay${RESET}"
+echo -e "${GREEN}5)${RESET} ${BOLD}k8s-gcr${RESET}"
+echo -e "${GREEN}6)${RESET} ${BOLD}k8s${RESET}"
+echo -e "${GREEN}7)${RESET} ${BOLD}mcr${RESET}"
+echo -e "${GREEN}8)${RESET} ${BOLD}elastic${RESET}"
+echo -e "${GREEN}0)${RESET} ${BOLD}exit${RESET}"
+echo -e "${YELLOW}-------------------------------------------------${RESET}"
+
+read -e -p "$(INFO "输入序号选择添加认证的服务,${LIGHT_YELLOW}空格分隔${RESET}多个选项 > ")" auth_service
+while [[ ! "$auth_service" =~ ^([0-8]+[[:space:]]*)+$ ]]; do
+    WARN "无效输入，请重新输入${LIGHT_YELLOW} 0-8 ${RESET}序号"
+    read -e -p "$(INFO "输入序号选择添加认证的服务,${LIGHT_YELLOW}空格分隔${RESET}多个选项 > ")" auth_service
+done
+}
+
+
+ADD_AUTH_CONFIG() {
+local FILE=$1
+local auth_config="
+
+auth:
+  htpasswd:
+    realm: basic-realm
+    path: /auth/htpasswd"
+
+if [ ! -f "$FILE" ]; then
+  ERROR "配置文件 ${LIGHT_BLUE}$FILE${RESET} 不存在"
+  exit 1
+else
+  if ! grep -q "auth:" "$FILE" || ! grep -q "htpasswd:" "$FILE" || ! grep -q "realm: basic-realm" "$FILE" || ! grep -q "path: /auth/htpasswd" "$FILE"; then
+    echo -e "$auth_config" | sudo tee -a "$FILE" > /dev/null
+    INFO "配置文件 ${LIGHT_BLUE}$FILE${RESET} 添加认证配置成功"
+  else
+    WARN "配置文件 ${LIGHT_BLUE}$FILE${RESET} 已添加认证配置"
+  fi
+fi
+}
+
+ADD_AUTH_COMPOSE() {
+local SERVICES=$1
+local FILE=${DOCKER_COMPOSE_FILE}
+local HTPASSWD_CONFIG="      - ./${SERVICES}_htpasswd:/auth/htpasswd"
+
+if [ ! -f "$FILE" ]; then
+  ERROR "配置文件 ${LIGHT_BLUE}$FILE${RESET} 不存在"
+  exit 1
+fi
+
+for SERVICE in "${SERVICES[@]}"; do
+  if grep -q "  $SERVICE:" "$FILE"; then
+    if ! grep -A10 "  $SERVICE:" "$FILE" | grep -q "      - ./${SERVICES}_htpasswd:/auth/htpasswd"; then
+      sed -i "/  $SERVICE:/,/volumes:/ {
+        /volumes:/a\\
+$HTPASSWD_CONFIG
+      }" "$FILE"
+      INFO "Htpasswd配置添加到 ${LIGHT_GREEN}$SERVICE${RESET} 服务中"
+    else
+      WARN "Htpasswd配置已存在 ${LIGHT_YELLOW}$SERVICE${RESET} 服务中"
+    fi
+  else
+    ERROR "服务 $SERVICE 在 $FILE 中不存在"
+  fi
+done
+}
+
+DEL_AUTH_CONFIG() {
+local FILE=$1
+
+# 检查文件是否存在
+if [ ! -f "$FILE" ]; then
+  ERROR "配置文件 $FILE 不存在"
+else
+  if grep -q "auth:" "$FILE"; then
+    sed -i '/^auth:$/,/^[^[:space:]]/d' "$FILE" >/dev/null
+    INFO "配置文件 ${LIGHT_BLUE}$FILE${RESET} 成功移除认证信息"
+  else
+    WARN "配置文件 ${LIGHT_BLUE}$FILE${RESET} 不存在认证信息"
+  fi
+fi
+}
+
+DEL_AUTH_COMPOSE() {
+local SERVICES=$1
+local FILE=${DOCKER_COMPOSE_FILE}
+
+# 检查文件是否存在
+if [ ! -f "$FILE" ]; then
+  ERROR "$File 不存在"
+  exit 1
+fi
+
+for SERVICE in "${SERVICES[@]}"; do
+  if grep -q "  $SERVICE:" "$FILE"; then
+    sed -i "/  $SERVICE:/,/^[^[:space:]]/ {/^[[:space:]]*- .\/${SERVICES}_htpasswd:\/auth\/htpasswd/d}" "$FILE"
+  else
+    ERROR "$FILE 中不存在服务 $SERVICE"
+  fi
+done
+}
+
+ENABLE_AUTH() {
+AUTH_MENU
+
+if [[ "$auth_service" == "0" ]]; then
+    WARN "退出添加容器认证操作!"
+    return
+else
+    for choice in ${auth_service}; do
+        if [[ $choice =~ ^[0-8]+$ ]] && ((choice > 0 && choice <= ${#files[@]})); then
+            file_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f2)
+            service_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f1)
+            selected_files+=("$file_name")
+
+            if docker-compose ps --services 2>/dev/null | grep -q "^${service_name}$"; then
+                selected_services+=("$service_name")
+            else
+                WARN "服务 ${LIGHT_MAGENTA}${service_name} 未运行${RESET}，无法添加认证授权"
+            fi
+
+        else
+            WARN "无效输入，请重新输入${LIGHT_YELLOW} 0-8 ${RESET}序号"
+            AUTH_MENU
+            return
+        fi
+    done
+
+
+    WARN "${LIGHT_GREEN}>>> 提示:${RESET} ${LIGHT_CYAN}配置认证后,执行镜像拉取需先通过 docker login登入后使用.访问UI需输入账号密码${RESET}"
+    read -e -p "$(INFO "是否需要配置镜像仓库访问账号和密码? ${PROMPT_YES_NO}")" enable_auth
+    while [[ "$enable_auth" != "y" && "$enable_auth" != "n" ]]; do
+        WARN "无效输入，请输入 ${LIGHT_GREEN}y${RESET} 或 ${LIGHT_YELLOW}n${RESET}"
+        read -e -p "$(INFO "是否需要配置镜像仓库访问账号和密码? ${PROMPT_YES_NO}")" enable_auth
+    done
+
+    if [[ "$enable_auth" == "y" ]]; then
+        while true; do
+
+            read -e -p "$(INFO "请输入账号名称: ")" username
+            if [[ -z "$username" ]]; then
+                ERROR "用户名不能为空。请重新输入"
+            else
+                break
+            fi
+        done
+
+        while true; do
+            read -e -p "$(INFO "请输入账号密码: ")" password
+            if [[ -z "$password" ]]; then
+                ERROR "密码不能为空。请重新输入"
+            else
+                break
+            fi
+        done
+
+        for file_url in "${selected_files[@]}"; do
+            yml_name=$(basename "$file_url")
+            ADD_AUTH_CONFIG "${PROXY_DIR}/${yml_name}"
+        done
+
+        for server in "${selected_services[@]}"; do
+            htpasswd -Bbn "$username" "$password" > ${PROXY_DIR}/${server}_htpasswd
+            ADD_AUTH_COMPOSE "${server}"
+        done
+    fi
+fi
+}
+
+DELETE_AUTH() {
+AUTH_MENU
+
+if [[ "$auth_service" == "0" ]]; then
+    WARN "退出移除容器认证操作!"
+    return
+else
+    for choice in ${auth_service}; do
+        if [[ $choice =~ ^[0-8]+$ ]] && ((choice > 0 && choice <= ${#files[@]})); then
+            file_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f2)
+            service_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f1)
+            selected_files+=("$file_name")
+
+            if docker-compose ps --services 2>/dev/null | grep -q "^${service_name}$"; then
+                selected_services+=("$service_name")
+            else
+                WARN "服务 ${LIGHT_MAGENTA}${service_name} 未运行${RESET}，无法添加认证授权"                
+            fi
+
+        else
+            WARN "无效输入，请重新输入${LIGHT_YELLOW} 0-8 ${RESET}序号"
+            AUTH_MENU
+            return
+        fi
+    done
+
+
+    for file_url in "${selected_files[@]}"; do
+        yml_name=$(basename "$file_url")
+        DEL_AUTH_CONFIG "${PROXY_DIR}/${yml_name}"
+    done
+
+    for server in "${selected_services[@]}"; do
+        DEL_AUTH_COMPOSE "${server}"
+        rm -f ${PROXY_DIR}/${server}_htpasswd
+    done
+fi
+}
+
+SEPARATOR "认证授权"
+echo -e "1) ${BOLD}${LIGHT_YELLOW}添加${RESET}认证"
+echo -e "2) ${BOLD}${LIGHT_CYAN}删除${RESET}认证"
+echo -e "3) ${BOLD}返回${LIGHT_RED}主菜单${RESET}"
+echo -e "0) ${BOLD}退出脚本${RESET}"
+echo "---------------------------------------------------------------"
+read -e -p "$(INFO "输入${LIGHT_CYAN}对应数字${RESET}并按${LIGHT_GREEN}Enter${RESET}键 > ")" auth_choice
+
+case $auth_choice in
+    1)
+        ENABLE_AUTH
+        if [ ${#selected_services[@]} -eq 0 ]; then
+            WARN "没有运行任何选择的服务，请${LIGHT_CYAN}重新选择运行${RESET}的服务"
+            AUTH_SERVICE_CONFIG # 没有服务运行调用函数
+        else
+            docker-compose down ${selected_services[*]}
+            docker-compose up -d --force-recreate ${selected_services[*]}
+        fi
+        AUTH_SERVICE_CONFIG
+        ;;
+    2)
+        DELETE_AUTH
+        if [ ${#selected_services[@]} -eq 0 ]; then
+            WARN "没有运行任何选择的服务，请${LIGHT_CYAN}重新选择运行${RESET}的服务"
+            AUTH_SERVICE_CONFIG # 没有服务运行调用函数
+        else
+            docker-compose down ${selected_services[*]}
+            docker-compose up -d --force-recreate ${selected_services[*]}
+        fi
+        AUTH_SERVICE_CONFIG
+        ;;
+    3)
+        main_menu
+        ;;
+    0)
+        exit 1
+        ;;
+    *)
+        WARN "输入了无效的选择。请重新${LIGHT_GREEN}选择0-3${RESET}的选项."
+        AUTH_SERVICE_CONFIG
+        ;;
+esac
+}
+
+
 function main_menu() {
 echo -e "╔════════════════════════════════════════════════════╗"
 echo -e "║                                                    ║"
@@ -2219,10 +2658,10 @@ echo
 SEPARATOR "请选择操作"
 echo -e "1) ${BOLD}${LIGHT_GREEN}安装${RESET}服务"
 echo -e "2) ${BOLD}${LIGHT_MAGENTA}组件${RESET}安装"
-echo -e "3) ${BOLD}${LIGHT_YELLOW}重启${RESET}服务"
-echo -e "4) ${BOLD}${GREEN}更新${RESET}服务"
-echo -e "5) ${BOLD}${LIGHT_CYAN}更新${RESET}配置"
-echo -e "6) ${BOLD}${LIGHT_RED}卸载${RESET}服务"
+echo -e "3) ${BOLD}${LIGHT_YELLOW}管理${RESET}服务"
+echo -e "4) ${BOLD}${LIGHT_CYAN}更新${RESET}配置"
+echo -e "5) ${BOLD}${LIGHT_RED}卸载${RESET}服务"
+echo -e "6) ${BOLD}${LIGHT_BLUE}认证${RESET}授权"
 echo -e "7) 本机${BOLD}${CYAN}Docker代理${RESET}"
 echo -e "8) 设置成${BOLD}${YELLOW}系统命令${RESET}"
 echo -e "0) ${BOLD}退出脚本${RESET}"
@@ -2238,36 +2677,18 @@ case $main_choice in
         COMP_INST
         ;;
     3)
-        SEPARATOR "重启服务"
-        RESTART_SERVICE
-        if [ ${#selected_services[@]} -eq 0 ]; then
-            ERROR "没有需要重启的服务,请重新选择"
-            RESTART_SERVICE
-        else
-            docker-compose stop ${selected_services[*]}
-            docker-compose up -d --force-recreate ${selected_services[*]}
-        fi
-        SEPARATOR "重启完成"
+        SVC_MGMT
         ;;
     4)
-        SEPARATOR "更新服务"
-        UPDATE_SERVICE
-        if [ ${#selected_services[@]} -eq 0 ]; then
-            ERROR "没有需要更新的服务,请重新选择"
-            UPDATE_SERVICE
-        else
-            docker-compose pull ${selected_services[*]}
-            docker-compose up -d --force-recreate ${selected_services[*]}
-        fi
-        SEPARATOR "更新完成"
-        ;;
-    5)
         SEPARATOR "更新配置"
         UPDATE_CONFIG
         SEPARATOR "更新完成"
         ;;
-    6)
+    5)
         UNI_DOCKER_SERVICE
+        ;;
+    6)
+        AUTH_SERVICE_CONFIG
         ;;
     7)
         SEPARATOR "配置本机Docker代理"
@@ -2287,5 +2708,4 @@ case $main_choice in
         ;;
 esac
 }
-
 main_menu
