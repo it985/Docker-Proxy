@@ -40,12 +40,15 @@ MAGENTA="\033[0;35m"
 CYAN="\033[0;36m"
 WHITE="\033[1;37m"
 BLACK="\033[0;30m"
+PINK="\033[0;95m"
 LIGHT_GREEN="\033[1;32m"
 LIGHT_RED="\033[1;31m"
 LIGHT_YELLOW="\033[1;33m"
 LIGHT_BLUE="\033[1;34m"
 LIGHT_MAGENTA="\033[1;35m"
 LIGHT_CYAN="\033[1;36m"
+LIGHT_PINK="\033[1;95m"
+BRIGHT_CYAN="\033[96m"
 BOLD="\033[1m"
 UNDERLINE="\033[4m"
 BLINK="\033[5m"
@@ -83,7 +86,7 @@ cd "${PROXY_DIR}"
 GITRAW="https://raw.githubusercontent.com/dqzboy/Docker-Proxy/main"
 CNGITRAW="https://gitee.com/boydqz/Docker-Proxy/raw/main"
 
-IMAGE_NAME="registry"
+IMAGE_NAME="dqzboy/registry"
 UI_IMAGE_NAME="dqzboy/docker-registry-ui"
 DOCKER_COMPOSE_FILE="docker-compose.yaml"
 
@@ -199,7 +202,7 @@ fi
 function CHECKBBR() {
 kernel_version=$(uname -r | awk -F "-" '{print $1}')
 
-read -e -p "$(WARN "是否开启${LIGHT_CYAN}BBR${RESET},优化网络带宽提高网络性能? ${PROMPT_YES_NO}")" choice_bbr
+read -e -p "$(WARN "是否开启${BRIGHT_CYAN}BBR${RESET},优化网络带宽提高网络性能? ${PROMPT_YES_NO}")" choice_bbr
 case $choice_bbr in
     y | Y)
         version_compare=$(echo "${kernel_version} 4.9" | awk '{if ($1 >= $2) print "yes"; else print "no"}')
@@ -209,15 +212,14 @@ case $choice_bbr in
         fi
         sysctl net.ipv4.tcp_available_congestion_control | grep -q "bbr"
         if [ $? -eq 0 ]; then
-            INFO "你的服务器已经启动BBR"
+            INFO "你的服务器已经启动 ${BRIGHT_CYAN}BBR${RESET}"
         else
             INFO "开启BBR中..."
-
             modprobe tcp_bbr
             if [ $? -eq 0 ]; then
-                INFO "BBR模块添加成功."
+                INFO "${BRIGHT_CYAN}BBR${RESET} 模块${LIGHT_GREEN}添加成功${RESET}"
             else 
-                ERROR "BBR模块添加失败，请执行 ${LIGHT_CYAN}sysctl -p${RESET} 检查."
+                ERROR "${BRIGHT_CYAN}BBR${RESET} 模块${LIGHT_RED}添加失败${RESET}，请执行 ${LIGHT_CYAN}sysctl -p${RESET} 检查."
                 exit 1
             fi
 
@@ -245,15 +247,15 @@ case $choice_bbr in
                 exit 2
             fi
 
-            lsmod | grep tcp_bbr
+            lsmod | grep tcp_bbr &> /dev/null
             if [ $? -eq 0 ]; then
-                INFO "BBR已经成功开启。"
+                INFO "${BRIGHT_CYAN}BBR${RESET} 已经${LIGHT_GREEN}成功开启${RESET}"
             else
-                ERROR "BBR开启失败，请执行 ${LIGHT_CYAN}sysctl -p${RESET} 检查."
+                ERROR "${BRIGHT_CYAN}BBR${RESET} 开启${LIGHT_RED}失败${RESET}，请执行 ${LIGHT_CYAN}sysctl -p${RESET} 检查."
                 exit 3
             fi
 
-            WARN "如果BBR开启后未生效，请执行 ${LIGHT_BLUE}reboot${RESET} 重启服务器使其BBR模块生效"
+            WARN "如果 ${BRIGHT_CYAN}BBR${RESET} 开启后${LIGHT_YELLOW}未生效${RESET}，请执行 ${LIGHT_BLUE}reboot${RESET} 重启服务器使其BBR模块生效"
         fi
     ;;
     n | N)
@@ -345,7 +347,7 @@ status=$(systemctl is-active caddy)
 if [ "$status" = "active" ]; then
     INFO "Caddy 服务运行正常，请继续..."
 else
-    ERROR "Caddy 服务未运行，会导致服务无法正常安装运行，请检查后再次执行脚本！"
+    ERROR "Caddy 服务未运行，请查看日志报错，定位问题后再次执行脚本！"
     ERROR "-----------服务启动失败，请查看错误日志 ↓↓↓-----------"
       journalctl -u caddy.service --no-pager
     ERROR "-----------服务启动失败，请查看错误日志 ↑↑↑-----------"
@@ -463,12 +465,27 @@ SEPARATOR "配置Caddy"
 while true; do
     INFO "${LIGHT_GREEN}>>> 域名解析主机记录(即域名前缀):${RESET} ${LIGHT_CYAN}ui、hub、gcr、ghcr、k8sgcr、k8s、quay、mcr、elastic${RESET}"
     WARN "${LIGHT_GREEN}>>> 只需选择你部署的服务进行解析即可${RESET},${LIGHT_YELLOW}无需将上面提示中所有的主机记录进行解析${RESET}"
-    read -e -p "$(WARN "是否配置Caddy,实现自动HTTPS? 执行前需提前在DNS服务商选择部署的服务进行解析主机记录 ${PROMPT_YES_NO}")" caddy_conf
+    read -e -p "$(WARN "是否配置Caddy,实现自动HTTPS? 执行前需在DNS服务商对部署服务解析主机记录 ${PROMPT_YES_NO}")" caddy_conf
     case "$caddy_conf" in
         y|Y )
             read -e -p "$(INFO "请输入你的域名${LIGHT_BLUE}[例: baidu.com]${RESET} ${LIGHT_RED}不可为空${RESET}: ")" caddy_domain           
             read -e -p "$(INFO "请输入要配置的${LIGHT_MAGENTA}主机记录${RESET}，用逗号分隔${LIGHT_BLUE}[例: ui,hub]${RESET}: ")" selected_records
+
+            # 验证输入的主机记录
+            local valid_records=("ui" "hub" "gcr" "ghcr" "k8sgcr" "k8s" "quay" "mcr" "elastic")
             IFS=',' read -r -a records_array <<< "$selected_records"
+            local invalid_records=()
+            for record in "${records_array[@]}"; do
+                if ! [[ " ${valid_records[@]} " =~ " ${record} " ]]; then
+                    invalid_records+=("$record")
+                fi
+            done
+
+            if [[ ${#invalid_records[@]} -gt 0 ]]; then
+                ERROR "无效的主机记录: ${LIGHT_RED}${invalid_records[@]}${RESET}"
+                INFO "请输入有效的主机记录: ${LIGHT_GREEN}ui、hub、gcr、ghcr、k8sgcr、k8s、quay、mcr、elastic${RESET}"
+                continue
+            fi
 
             declare -A record_templates
             record_templates[ui]="ui.$caddy_domain {
@@ -590,7 +607,7 @@ status=$(systemctl is-active nginx)
 if [ "$status" = "active" ]; then
     INFO "Nginx 服务运行正常，请继续..."
 else
-    ERROR "Nginx 服务未运行，会导致服务无法正常安装运行，请检查后再次执行脚本！"
+    ERROR "Nginx 服务未运行，请查看日志报错，定位问题后再次执行脚本！"
     ERROR "-----------服务启动失败，请查看错误日志 ↓↓↓-----------"
       journalctl -u nginx.service --no-pager
     ERROR "-----------服务启动失败，请查看错误日志 ↑↑↑-----------"
@@ -681,13 +698,27 @@ while true; do
     WARN "自行安装的 Nginx ${LIGHT_RED}请勿执行此操作${RESET}，${LIGHT_BLUE}以防覆盖原有配置${RESET}"
     INFO "${LIGHT_GREEN}>>> 域名解析主机记录(即域名前缀):${RESET} ${LIGHT_CYAN}ui、hub、gcr、ghcr、k8sgcr、k8s、quay、mcr、elastic${RESET}"
     WARN "${LIGHT_GREEN}>>> 只需选择你部署的服务进行解析即可${RESET},${LIGHT_YELLOW}无需将上面提示中所有的主机记录进行解析${RESET}"
-    read -e -p "$(WARN "是否配置 Nginx？配置完成后需在DNS服务商对部署的服务进行解析主机记录 ${PROMPT_YES_NO}")" nginx_conf
+    read -e -p "$(WARN "是否配置 Nginx？配置完成后需在DNS服务商解析主机记录 ${PROMPT_YES_NO}")" nginx_conf
     case "$nginx_conf" in
         y|Y )
-            read -e -p "$(INFO "请输入你的域名${LIGHT_BLUE}[例: baidu.com]${RESET} ${LIGHT_RED}不可为空${RESET}: ")" nginx_domain
-            
+            read -e -p "$(INFO "请输入你的域名${LIGHT_BLUE}[例: baidu.com]${RESET} ${LIGHT_RED}不可为空${RESET}: ")" nginx_domain           
             read -e -p "$(INFO "请输入要配置的${LIGHT_MAGENTA}主机记录${RESET}，用逗号分隔${LIGHT_BLUE}[例: ui,hub]${RESET}: ")" selected_records
+
+            # 验证输入的主机记录
+            local valid_records=("ui" "hub" "gcr" "ghcr" "k8sgcr" "k8s" "quay" "mcr" "elastic")
             IFS=',' read -r -a records_array <<< "$selected_records"
+            local invalid_records=()
+            for record in "${records_array[@]}"; do
+                if ! [[ " ${valid_records[@]} " =~ " ${record} " ]]; then
+                    invalid_records+=("$record")
+                fi
+            done
+
+            if [[ ${#invalid_records[@]} -gt 0 ]]; then
+                ERROR "无效的主机记录: ${LIGHT_RED}${invalid_records[@]}${RESET}"
+                INFO "请输入有效的主机记录: ${LIGHT_GREEN}ui、hub、gcr、ghcr、k8sgcr、k8s、quay、mcr、elastic${RESET}"
+                continue
+            fi
 
             declare -A record_templates
             record_templates[ui]="server {
@@ -966,21 +997,19 @@ while true; do
 done
 }
 
-
 function CHECK_DOCKER() {
 status=$(systemctl is-active docker)
 
 if [ "$status" = "active" ]; then
     INFO "Docker 服务运行正常，请继续..."
 else
-    ERROR "Docker 服务未运行，会导致服务无法正常安装运行，请检查后再次执行脚本！"
+    ERROR "Docker 服务未运行，请查看日志报错，定位问题后再次执行脚本！"
     ERROR "-----------服务启动失败，请查看错误日志 ↓↓↓-----------"
       journalctl -u docker.service --no-pager
     ERROR "-----------服务启动失败，请查看错误日志 ↑↑↑-----------"
     exit 1
 fi
 }
-
 
 function INSTALL_DOCKER() {
 repo_file="docker-ce.repo"
@@ -1079,7 +1108,6 @@ else
     exit 1
 fi
 }
-
 
 function INSTALL_COMPOSE() {
 SEPARATOR "安装Docker Compose"
@@ -1270,7 +1298,7 @@ fi
 function update_docker_registry_url() {
     local container_name=$1
     if [[ -f "${PROXY_DIR}/${DOCKER_COMPOSE_FILE}" ]]; then
-        sed -ri "s@- DOCKER_REGISTRY_URL=http://reg-docker-hub:5000@- DOCKER_REGISTRY_URL=http://${container_name}:5000@g" ${PROXY_DIR}/${DOCKER_COMPOSE_FILE} 
+        sed -i "s@- DOCKER_REGISTRY_URL=.*@- DOCKER_REGISTRY_URL=http://${container_name}:5000@g" ${PROXY_DIR}/${DOCKER_COMPOSE_FILE}
     else
         ERROR "文件 ${LIGHT_CYAN}${PROXY_DIR}/${DOCKER_COMPOSE_FILE} ${RESET} ${LIGHT_RED}不存在${RESET},导致容器无法应用新配置"
         exit 1
@@ -1368,8 +1396,8 @@ function DOWN_CONFIG() {
 
         selected_all=false
 
-
-        if [[ "$main_choice" != "5" ]]; then
+        # 非更新配置操作则执行下面步骤
+        if [[ "$main_choice" != "4" ]]; then
             first_selected_container=${selected_containers[0]}
             update_docker_registry_url "$first_selected_container"
         fi
@@ -1552,7 +1580,6 @@ PROXY_HTTP
 START_CONTAINER
 }
 
-
 function STOP_REMOVE_CONTAINER() {
     if [[ -f "${PROXY_DIR}/${DOCKER_COMPOSE_FILE}" ]]; then
         INFO "停止和移除所有容器"
@@ -1562,7 +1589,6 @@ function STOP_REMOVE_CONTAINER() {
         exit 1
     fi
 }
-
 
 function UPDATE_CONFIG() {
 while true; do
@@ -1594,16 +1620,15 @@ function REMOVE_NONE_TAG() {
     done
 }
 
-
 function PACKAGE() {
 while true; do
-    read -e -p "$(INFO "是否执行软件包安装? ${PROMPT_YES_NO}")" choice_package
+    read -e -p "$(INFO "是否执行软件包安装? (${LIGHT_YELLOW}首次部署需安装依赖${RESET}) ${PROMPT_YES_NO}")" choice_package
     case "$choice_package" in
         y|Y )
             INSTALL_PACKAGE
             break;;
         n|N )
-            WARN "跳过软件包安装步骤。"
+            WARN "跳过软件包安装步骤"
             break;;
         * )
             INFO "请输入 ${LIGHT_GREEN}y${RESET} 或 ${LIGHT_YELLOW}n${RESET}";;
@@ -1636,7 +1661,7 @@ while true; do
             done
             break
         else
-            WARN "跳过WEB服务的安装。"
+            WARN "跳过WEB服务安装步骤"
             break
         fi
     else
@@ -1904,9 +1929,7 @@ RESTART_SERVICE() {
 
 UPDATE_SERVICE() {
     CONTAINER_SERVICES
-
     selected_services=()
-
     WARN "更新服务请在${LIGHT_GREEN}${DOCKER_COMPOSE_FILE}${RESET}文件存储目录下执行脚本.默认安装路径: ${LIGHT_BLUE}${PROXY_DIR}${RESET}"
     echo -e "${YELLOW}-------------------------------------------------${RESET}"
     echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
@@ -1954,12 +1977,9 @@ UPDATE_SERVICE() {
     fi
 }
 
-
 CONTAIENR_LOGS() {
     CONTAINER_SERVICES
-
     selected_services=()
-
     echo -e "${YELLOW}-------------------------------------------------${RESET}"
     echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
     echo -e "${GREEN}2)${RESET} ${BOLD}gcr${RESET}"
@@ -1994,7 +2014,6 @@ CONTAIENR_LOGS() {
         INFO "查看日志的服务: ${selected_services[*]}"
     fi
 }
-
 
 MODIFY_SERVICE_CONFIG() {
     selected_services=()
@@ -2042,7 +2061,6 @@ MODIFY_SERVICE_CONFIG() {
         service_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f1)
         selected_files+=("$file_name")
 
-        # 检查文件是否存在
         if [ -f "${PROXY_DIR}/${file_name}" ]; then
             existing_files+=("$file_name")
             selected_services+=("$service_name")
@@ -2050,7 +2068,6 @@ MODIFY_SERVICE_CONFIG() {
             non_existing_files+=("$file_name")
         fi
         
-        # 检查服务是否运行
         if ! docker-compose ps --services 2>/dev/null | grep -q "^${service_name}$"; then
             WARN "服务 ${service_name} 未运行。"
         fi
@@ -2136,6 +2153,12 @@ case $ser_choice in
         ;;
     4)
         MODIFY_SERVICE_CONFIG
+        if [ ${#selected_services[@]} -eq 0 ]; then
+            ERROR "修改的服务未运行,请重新选择"
+            MODIFY_SERVICE_CONFIG
+        else
+            docker-compose restart ${selected_services[*]}
+        fi
         SVC_MGMT
         ;;
     5)
@@ -2307,7 +2330,6 @@ else
 fi
 }
 
-
 RM_ALLSERVICE() {
 STOP_REMOVE_CONTAINER
 REMOVE_NONE_TAG
@@ -2374,8 +2396,46 @@ esac
 
 
 function AUTH_SERVICE_CONFIG() {
+CHECK_REG_AUTH() {
+if ! command -v docker &> /dev/null; then
+    ERROR "docker 命令未找到，请确保 Docker 已正确安装"
+    AUTH_SERVICE_CONFIG
+fi
+declare -A services
+services=(
+    ["reg-docker-hub"]="dockerhub"
+    ["reg-gcr"]="gcr"
+    ["reg-ghcr"]="ghcr"
+    ["reg-quay"]="quay"
+    ["reg-k8s-gcr"]="k8sgcr"
+    ["reg-k8s"]="k8s"
+    ["reg-mcr"]="mcr"
+    ["reg-elastic"]="elastic"
+)
+
+container_names=$(docker ps --filter "name=reg-" --filter "status=running" --format "{{.Names}}")
+
+auth_containers=()
+
+for container_name in $container_names; do
+    specified_name=${services[$container_name]}
+    if [ -z "$specified_name" ]; then
+        specified_name=$container_name
+    fi
+    if docker exec $container_name grep -q "auth" /etc/distribution/config.yml; then
+        auth_containers+=("$specified_name")
+    fi
+done
+
+if [ ${#auth_containers[@]} -gt 0 ]; then
+    INFO "当前运行的 Docker 容器中${LIGHT_GREEN}包含认证${RESET}的容器有: ${LIGHT_CYAN}${auth_containers[*]}${RESET}"
+else
+    WARN "当前运行的 Docker 容器中${LIGHT_YELLOW}没有包含认证${RESET}的容器"
+fi
+}
 
 AUTH_MENU() {
+CHECK_REG_AUTH
 selected_files=()
 selected_services=()
 files=(
@@ -2461,7 +2521,6 @@ done
 DEL_AUTH_CONFIG() {
 local FILE=$1
 
-# 检查文件是否存在
 if [ ! -f "$FILE" ]; then
   ERROR "配置文件 $FILE 不存在"
 else
@@ -2478,7 +2537,6 @@ DEL_AUTH_COMPOSE() {
 local SERVICES=$1
 local FILE=${DOCKER_COMPOSE_FILE}
 
-# 检查文件是否存在
 if [ ! -f "$FILE" ]; then
   ERROR "$File 不存在"
   exit 1
@@ -2586,7 +2644,6 @@ else
         fi
     done
 
-
     for file_url in "${selected_files[@]}"; do
         yml_name=$(basename "$file_url")
         DEL_AUTH_CONFIG "${PROXY_DIR}/${yml_name}"
@@ -2643,7 +2700,7 @@ case $auth_choice in
 esac
 }
 
-
+## 主菜单
 function main_menu() {
 echo -e "╔════════════════════════════════════════════════════╗"
 echo -e "║                                                    ║"
@@ -2667,7 +2724,6 @@ echo -e "8) 设置成${BOLD}${YELLOW}系统命令${RESET}"
 echo -e "0) ${BOLD}退出脚本${RESET}"
 echo "---------------------------------------------------------------"
 read -e -p "$(INFO "输入${LIGHT_CYAN}对应数字${RESET}并按${LIGHT_GREEN}Enter${RESET}键 > ")" main_choice
-
 
 case $main_choice in
     1)
