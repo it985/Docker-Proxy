@@ -108,7 +108,7 @@ bash -c "$(curl -fsSL https://cdn.jsdelivr.net/gh/dqzboy/Docker-Proxy/install/Do
 
 **2.** 下载[docker-compose.yaml](https://github.com/dqzboy/Docker-Proxy/blob/main/docker-compose.yaml)文件到你本地机器上，并且与配置文件同级目录下
 
-**3.** 执行 `docker compose` 命令启动容器服务
+**3.** 执行 `docker compose` 或 `docker-compose` 命令启动容器服务
 ```shell
 docker compose up -d
 
@@ -197,12 +197,22 @@ docker pull gcr.your_domain_name/google-containers/pause:3.1
     </tr>
     <tr>
         <td width="50%" align="center"><img src="https://github.com/dqzboy/Docker-Proxy/assets/42825450/55df7f6f-c788-4200-9bcd-631998dc53ef?raw=true"></td>
-        <td width="50%" align="center"><img src=https://github.com/dqzboy/Docker-Proxy/assets/42825450/c544fb1e-ecd5-447c-9661-0c5913586118?raw=true"></td>
+        <td width="50%" align="center"><img src="https://github.com/dqzboy/Docker-Proxy/assets/42825450/c544fb1e-ecd5-447c-9661-0c5913586118?raw=true"></td>
     </tr>
 </table>
 
 ## 💻 UI
-![docker-proxy](https://github.com/dqzboy/Docker-Proxy/assets/42825450/0ddb041b-64f6-4d93-b5bf-85ad3b53d0e0)
+<br/>
+<table>
+    <tr>
+      <td width="50%" align="center"><b>Docker Registry UI</b></td>
+      <td width="50%" align="center"><b>Docker-Proxy CmdUI</b></td>
+    </tr>
+    <tr>
+        <td width="50%" align="center"><img src="https://github.com/dqzboy/Docker-Proxy/assets/42825450/0ddb041b-64f6-4d93-b5bf-85ad3b53d0e0?raw=true"></td>
+        <td width="50%" align="center"><img src="https://github.com/user-attachments/assets/2efe5d7e-6542-4867-9e50-17fa0e704b23?raw=true"></td>
+    </tr>
+</table>
 
 ---
 
@@ -222,8 +232,6 @@ docker pull gcr.your_domain_name/google-containers/pause:3.1
 
 ## 🫶 赞助
 如果你觉得这个项目对你有帮助，请给我点个Star。并且情况允许的话，可以给我一点点支持，总之非常感谢支持😊
-
-> 项目作者自建公益服务：[服务地址查看](https://uk.dqzboy.xyz/)
 
 <table>
     <tr>
@@ -260,7 +268,7 @@ docker pull gcr.your_domain_name/google-containers/pause:3.1
 
 
 ## License
-MIT © [DingQinZheng](./LICENSE)
+Docker-Proxy is available under the [Apache 2 license](./LICENSE)
 
 ---
 

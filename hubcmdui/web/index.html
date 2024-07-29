@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker 镜像代理加速</title>
+    <link rel="icon" href="https://cdn.jsdelivr.net/gh/dqzboy/Blog-Image/BlogCourse/docker-proxy.png" type="image/png">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Lato', 'Helvetica', 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #24292e;
+            margin: 0;
+            padding: 0;
+            background-color: #f6f8fa;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .header {
+            background-color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 10px 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .logo {
+            max-height: 70px;
+        }
+        .nav-menu {
+            display: flex;
+            gap: 20px;
+            font-size: 18px;
+            margin-left: auto;
+        }
+        .nav-menu a {
+            color: #0366d6;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        .nav-menu a:hover {
+            color: #0056b3;
+        }
+        .container {
+            max-width: 800px;
+            width: 90%;
+            margin: 20px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            flex-grow: 1;
+            position: relative;
+        }
+        h1, h2 {
+            border-bottom: 2px solid #eaecef;
+            padding-bottom: 0.5em;
+            margin-bottom: 1em;
+            color: #0366d6;
+        }
+        .input-group {
+            margin-bottom: 30px;
+            display: flex;
+            flex-direction: column;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #d1d5da;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 12px 20px;
+            background-color: #2ea44f;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            align-self: flex-start;
+        }
+        button:hover {
+            background-color: #2c974b;
+        }
+        .ad-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 30px;
+            margin-bottom: 30px;
+        }
+        .ad-container img {
+            max-width: 100%;
+            border-radius: 8px;
+        }
+        pre {
+            background-color: #f6f8fa;
+            border-radius: 4px;
+            padding: 16px;
+            overflow: auto;
+            font-size: 14px;
+            border: 1px solid #e1e4e8;
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            background-color: #f0f0f0;
+            color: #333;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+            font-family: 'Arial', sans-serif;
+            font-weight: 500;
+            border-radius: 12px;
+        }
+        .copy-btn:hover {
+            background-color: #e0e0e0;
+            color: #000;
+        }
+        .step {
+            margin-bottom: 25px;
+            background-color: #fff;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 20px;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #24292e;
+        }
+        .footer {
+            background-color: #f6f8fa;
+            color: #6a737d;
+            text-align: center;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .footer a {
+            color: #58a6ff;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        #backToTopBtn {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            font-size: 16px;
+            padding: 10px;
+            background-color: #0366d6;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #backToTopBtn:hover {
+            background-color: #0256b9;
+        }
+        #backToTopBtn::after {
+            content: '返回顶部';
+            display: none;
+            position: absolute;
+            bottom: 50px;
+            right: 0;
+            padding: 5px 10px;
+            background-color: #333;
+            color: white;
+            border-radius: 5px;
+            white-space: nowrap;
+        }
+        #backToTopBtn:hover::after {
+            display: block;
+        }
+        @media (max-width: 768px) {
+            .nav-menu {
+                display: none;
+            }
+            .header-content {
+                flex-direction: column;
+            }
+            .logo {
+                margin-bottom: 10px;
+            }
+            .input-group {
+                flex-direction: column;
+            }
+            .container {
+                width: 100%;
+                padding: 10px;
+            }
+            .ad-container img {
+                width: 100%;
+                height: auto;
+            }
+        }
+        @media (min-width: 769px) {
+            .nav-menu {
+                display: flex;
+            }
+        }
+        .notification {
+            display: none;
+            position: absolute;
+            top: 7px; /* Adjust the position as needed */
+            left: 87%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <!-- 页眉 -->
+    <header class="header">
+        <div class="header-content">
+            <img src="https://cdn.jsdelivr.net/gh/dqzboy/Blog-Image/BlogCourse/docker-proxy.png" alt="Logo" class="logo">
+            <nav class="nav-menu" id="navMenu">
+                <!-- 菜单项将通过 JavaScript 动态加载 -->
+            </nav>
+        </div>
+    </header>
+    <!-- 内容容器 -->
+    <div class="container">
+        <h1>Docker 镜像代理加速</h1>
+        <div class="input-group">
+            <input type="text" id="imageInput" placeholder="输入 Docker 镜像，例如：nginx 或 mysql:5.7">
+            <button onclick="generateCommands()">获取加速命令</button>
+        </div>
+        <!-- 广告容器 -->
+        <div class="ad-container" id="adContainer" style="display: flex;">
+            <!-- 广告内容将通过 JavaScript 动态加载 -->
+        </div>
+        <!-- 结果容器 -->
+        <div id="result" style="display:none;">
+            <h2>加速命令</h2>
+            <div id="commandsContainer"></div>
+        </div>
+    </div>
+    <!-- 页脚 -->
+    <footer class="footer">
+        <p>Copyright © <span id="currentYear"></span> All Rights Reserved. <a href="https://github.com/dqzboy/Docker-Proxy" target="_blank" rel="noopener noreferrer">Docker-Proxy</a> 版权所有</p>
+    </footer>
+
+    <!-- 返回顶部按钮 -->
+    <button id="backToTopBtn" onclick="scrollToTop()">⌃</button>
+
+    <script>
+        // 设置当前年份
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+        let proxyDomain = ''; // 默认代理加速地址
+
+        // 生成加速命令
+        function generateCommands() {
+            const imageInput = document.getElementById('imageInput').value.trim();
+            if (!imageInput) {
+                alert('请输入 Docker 镜像');
+                return;
+            }
+            let [imageName, tag] = imageInput.split(':');
+            tag = tag || 'latest';
+            
+            let originalImage = `${imageName}:${tag}`;
+            let proxyImage = '';
+
+            if (!imageName.includes('/')) {
+                proxyImage = `${proxyDomain}/library/${imageName}:${tag}`;
+            } else {
+                proxyImage = `${proxyDomain}/${imageName}:${tag}`;
+            }
+
+            const commands = [
+                { title: "原始拉取命令", cmd: `docker pull ${originalImage}` },
+                { title: "代理拉取镜像", cmd: `docker pull ${proxyImage}` },
+                { title: "重命名镜像", cmd: `docker tag ${proxyImage} ${originalImage}` },
+                { title: "删除代理镜像", cmd: `docker rmi ${proxyImage}` }
+            ];
+
+            const resultDiv = document.getElementById('result');
+            const container = document.getElementById('commandsContainer');
+            container.innerHTML = '';
+
+            // 将生成的命令添加到结果容器中
+            commands.forEach((command, index) => {
+                const cmdDiv = document.createElement('div');
+                cmdDiv.className = 'step';
+                cmdDiv.innerHTML = `
+                    <h3>${index + 1}. ${command.title}</h3> <pre><code>${command.cmd}</code><div id="copyNotification${index}" class="notification">已复制!</div><button class="copy-btn" onclick="copyToClipboard('${command.cmd}', 'copyNotification${index}')">复制</button></pre>
+                `;
+                container.appendChild(cmdDiv);
+            });
+
+            // 显示结果并隐藏广告
+            resultDiv.style.display = 'block';
+            document.getElementById('adContainer').style.display = 'none';
+            document.getElementById('backToTopBtn').style.display = 'block';
+        }
+
+        // 复制命令到剪贴板
+        function copyToClipboard(text, notificationId) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showNotification(notificationId);
+                }, (err) => {
+                    console.error('无法复制文本: ', err);
+                });
+            } else {
+                // 回退方案：使用临时的 <textarea> 元素
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showNotification(notificationId);
+            }
+        }
+
+        function showNotification(notificationId) {
+            var notification = document.getElementById(notificationId);
+            notification.style.display = 'block';
+            notification.style.opacity = '1';
+
+            // 在2秒后隐藏提示
+            setTimeout(function() {
+                notification.style.opacity = '0';
+                setTimeout(function() {
+                    notification.style.display = 'none';
+                }, 500);
+            }, 2000);
+        }
+
+        // 滚动到顶部
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        // 获取并加载配置
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+                if (config.logo) {
+                    document.querySelector('.logo').src = config.logo;
+                }
+                if (config.menuItems && Array.isArray(config.menuItems)) {
+                    const navMenu = document.getElementById('navMenu');
+                    navMenu.innerHTML = ''; // 清空菜单
+                    config.menuItems.forEach(item => {
+                        const a = document.createElement('a');
+                        a.href = item.link;
+                        a.textContent = item.text;
+                        if (item.newTab) {
+                            a.target = '_blank';
+                        }
+                        navMenu.appendChild(a);
+                    });
+                }
+                if (config.adImages && Array.isArray(config.adImages)) {
+                    const adContainer = document.getElementById('adContainer');
+                    adContainer.innerHTML = ''; // 清空广告容器
+                    config.adImages.forEach((ad, index) => {
+                        const adLink = document.createElement('a');
+                        adLink.href = ad.link;
+                        adLink.target = '_blank';
+                        const adImage = document.createElement('img');
+                        adImage.src = ad.url;
+                        adImage.alt = ad.alt || '广告图片';
+                        adImage.style.display = 'none'; // 初始状态隐藏所有广告图片
+                        adLink.appendChild(adImage);
+                        adContainer.appendChild(adLink);
+                    });
+
+                    // 轮播功能
+                    let currentAdIndex = 0;
+                    const adImages = adContainer.querySelectorAll('img');
+                    function showAd(index) {
+                        adImages.forEach((img, i) => {
+                            img.style.display = i === index ? 'block' : 'none';
+                        });
+                    }
+                    showAd(currentAdIndex); // 显示第一张广告图片
+
+                    setInterval(() => {
+                        currentAdIndex = (currentAdIndex + 1) % adImages.length;
+                        showAd(currentAdIndex);
+                    }, 5000); // 每5秒切换一次广告
+                }
+                if (config.proxyDomain) {
+                    proxyDomain = config.proxyDomain;
+                }
+            } catch (error) {
+                console.error('加载配置失败:', error);
+            }
+        }
+
+        loadConfig();
+    </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+services:
+  ## HubCMD UI
+  hubcmd-ui:
+    container_name: hubcmd-ui
+    image: dqzboy/hubcmd-ui:latest
+    restart: always
+    ports:
+      - 30080:3000
