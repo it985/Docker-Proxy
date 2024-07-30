@@ -1523,7 +1523,7 @@ fi
 }
 
 
-# 一键部署时调用START_CONTAINER
+# 一键部署、安装指定容器加速服务时调用START_CONTAINER
 function START_CONTAINER() {
     if [ "$modify_config" = "y" ] || [ "$modify_config" = "Y" ]; then
         ADD_DOCKERD_PROXY
@@ -1536,15 +1536,17 @@ function START_CONTAINER() {
         docker-compose up -d --force-recreate
         # 检查命令执行是否成功
         if [ $? -ne 0 ]; then
-          ERROR "Docker 容器启动失败,请通过查看日志确认启动失败原因"
+          ERROR "Docker 容器${LIGHT_RED}启动失败${RESET}，请通过查看日志确认启动失败原因"
           exit 1
         fi
     else
         docker-compose up -d "${selected_names[@]}" registry-ui
         # 检查命令执行是否成功
         if [ $? -ne 0 ]; then
-          ERROR "Docker 容器启动失败,请通过查看日志确认启动失败原因"
+          ERROR "Docker 容器${LIGHT_RED}启动失败${RESET}，请通过查看日志确认启动失败原因"
           exit 1
+        else 
+           INFO "容器${LIGHT_GREEN}安装完成${RESET}，并${LIGHT_GREEN}成功启动${RESET}"
         fi
     fi
 }
@@ -1745,7 +1747,8 @@ case $proxy_install in
         ALL_IN_ONE
         ;;
     2)
-        ADD_DOCKER_SERVICE       
+        ADD_DOCKER_SERVICE
+        INSTALL_PROXY     
         ;;
     3)
         main_menu
@@ -2183,7 +2186,7 @@ CONTAIENR_LOGS() {
     fi
 }
 
-MODIFY_SERVICE_CONFIG() {
+MODIFY_SERVICE_TTL_CONFIG() {
     selected_services=()
     selected_files=()
     existing_files=()
@@ -2273,14 +2276,166 @@ MODIFY_SERVICE_CONFIG() {
         WARN "未选择有效的配置文件进行修改。"
     fi
 }
+### 启动新容器
+START_NEW_SERVER_CONFIG_FILES() {
+while true; do
+    read -e -p "$(INFO "安装环境确认 [${LIGHT_GREEN}国外输1${RESET} ${LIGHT_YELLOW}国内输2${RESET}] > ")" install_docker_reg
+    case "$install_docker_reg" in
+        1 )
+            files=(
+                "dockerhub reg-docker-hub ${GITRAW}/config/registry-hub.yml"
+                "gcr reg-gcr ${GITRAW}/config/registry-gcr.yml"
+                "ghcr reg-ghcr ${GITRAW}/config/registry-ghcr.yml"
+                "quay reg-quay ${GITRAW}/config/registry-quay.yml"
+                "k8sgcr reg-k8s-gcr ${GITRAW}/config/registry-k8sgcr.yml"
+                "k8s reg-k8s ${GITRAW}/config/registry-k8s.yml"
+                "mcr reg-mcr ${GITRAW}/config/registry-mcr.yml"
+                "elastic reg-elastic ${GITRAW}/config/registry-elastic.yml"
+            )
+            break;;
+        2 )
+            files=(
+                "dockerhub reg-docker-hub ${CNGITRAW}/config/registry-hub.yml"
+                "gcr reg-gcr ${CNGITRAW}/config/registry-gcr.yml"
+                "ghcr reg-ghcr ${CNGITRAW}/config/registry-ghcr.yml"
+                "quay reg-quay ${CNGITRAW}/config/registry-quay.yml"
+                "k8sgcr reg-k8s-gcr ${CNGITRAW}/config/registry-k8sgcr.yml"
+                "k8s reg-k8s ${CNGITRAW}/config/registry-k8s.yml"
+                "mcr reg-mcr ${CNGITRAW}/config/registry-mcr.yml"
+                "elastic reg-elastic ${CNGITRAW}/config/registry-elastic.yml"
+            )
+            break;;
+        * )
+            INFO "请输入 ${LIGHT_GREEN}1${RESET} 表示国外 或者 ${LIGHT_YELLOW}2${RESET} 表示大陆";;
+    esac
+done
+}
 
+START_NEW_SERVER_CONFIG_FILES() {
+while true; do
+    read -e -p "$(INFO "安装环境确认 [${LIGHT_GREEN}国外输1${RESET} ${LIGHT_YELLOW}国内输2${RESET}] > ")" install_docker_reg
+    case "$install_docker_reg" in
+        1 )
+            files=(
+                "dockerhub reg-docker-hub ${GITRAW}/config/registry-hub.yml"
+                "gcr reg-gcr ${GITRAW}/config/registry-gcr.yml"
+                "ghcr reg-ghcr ${GITRAW}/config/registry-ghcr.yml"
+                "quay reg-quay ${GITRAW}/config/registry-quay.yml"
+                "k8sgcr reg-k8s-gcr ${GITRAW}/config/registry-k8sgcr.yml"
+                "k8s reg-k8s ${GITRAW}/config/registry-k8s.yml"
+                "mcr reg-mcr ${GITRAW}/config/registry-mcr.yml"
+                "elastic reg-elastic ${GITRAW}/config/registry-elastic.yml"
+            )
+            break;;
+        2 )
+            files=(
+                "dockerhub reg-docker-hub ${CNGITRAW}/config/registry-hub.yml"
+                "gcr reg-gcr ${CNGITRAW}/config/registry-gcr.yml"
+                "ghcr reg-ghcr ${CNGITRAW}/config/registry-ghcr.yml"
+                "quay reg-quay ${CNGITRAW}/config/registry-quay.yml"
+                "k8sgcr reg-k8s-gcr ${CNGITRAW}/config/registry-k8sgcr.yml"
+                "k8s reg-k8s ${CNGITRAW}/config/registry-k8s.yml"
+                "mcr reg-mcr ${CNGITRAW}/config/registry-mcr.yml"
+                "elastic reg-elastic ${CNGITRAW}/config/registry-elastic.yml"
+            )
+            break;;
+        * )
+            INFO "请输入 ${LIGHT_GREEN}1${RESET} 表示国外 或者 ${LIGHT_YELLOW}2${RESET} 表示大陆";;
+    esac
+done
+}
+
+START_NEW_SERVER_DOWN_CONFIG() {
+    selected_names=()
+    selected_files=()
+    selected_containers=()
+
+    echo -e "${YELLOW}-------------------------------------------------${RESET}"
+    echo -e "${GREEN}1)${RESET} ${BOLD}docker hub${RESET}"
+    echo -e "${GREEN}2)${RESET} ${BOLD}gcr${RESET}"
+    echo -e "${GREEN}3)${RESET} ${BOLD}ghcr${RESET}"
+    echo -e "${GREEN}4)${RESET} ${BOLD}quay${RESET}"
+    echo -e "${GREEN}5)${RESET} ${BOLD}k8s-gcr${RESET}"
+    echo -e "${GREEN}6)${RESET} ${BOLD}k8s${RESET}"
+    echo -e "${GREEN}7)${RESET} ${BOLD}mcr${RESET}"
+    echo -e "${GREEN}8)${RESET} ${BOLD}elastic${RESET}"
+    echo -e "${GREEN}0)${RESET} ${BOLD}exit${RESET}"
+    echo -e "${YELLOW}-------------------------------------------------${RESET}"
+
+    read -e -p "$(INFO "输入序号下载对应配置文件,${LIGHT_YELLOW}空格分隔${RESET}多个选项 > ")" choices_newser
+    while [[ ! "$choices_newser" =~ ^([0-8]+[[:space:]]*)+$ ]]; do
+        WARN "无效输入，请重新输入${LIGHT_YELLOW} 0-9 ${RESET}序号"
+        read -e -p "$(INFO "输入序号下载对应配置文件,${LIGHT_YELLOW}空格分隔${RESET}多个选项 > ")" choices_newser
+    done
+
+
+    if [[ "$choices_newser" == "0" ]]; then
+        WARN "退出下载配置! ${LIGHT_YELLOW}没有配置将无法启动服务!!!${RESET}"
+        return
+    else
+        for choice in ${choices_newser}; do
+            if [[ $choice =~ ^[0-9]+$ ]] && ((choice > 0 && choice <= ${#files[@]})); then
+                file_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f1)
+                container_name=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f2)
+                file_url=$(echo "${files[$((choice - 1))]}" | cut -d' ' -f3-)
+                selected_names+=("$file_name")
+                selected_containers+=("$container_name")
+                selected_files+=("$file_url")
+                wget -NP ${PROXY_DIR}/ $file_url &>/dev/null
+            else
+                WARN "无效输入，请重新输入${LIGHT_YELLOW} 0-8 ${RESET}序号" 
+            fi
+        done
+    fi
+
+    WARN "${LIGHT_GREEN}>>> 提示:${RESET} ${LIGHT_BLUE}Proxy代理缓存过期时间${RESET} ${MAGENTA}单位:ns、us、ms、s、m、h.默认ns,0禁用缓存过期${RESET}"
+    read -e -p "$(INFO "是否要修改缓存时间? ${PROMPT_YES_NO}")" modify_cache
+    while [[ "$modify_cache" != "y" && "$modify_cache" != "n" ]]; do
+        WARN "无效输入，请输入 ${LIGHT_GREEN}y${RESET} 或 ${LIGHT_YELLOW}n${RESET}"
+        read -e -p "$(INFO "是否要修改缓存时间? ${PROMPT_YES_NO}")" modify_cache
+    done
+
+    if [[ "$modify_cache" == "y" ]]; then
+        while true; do
+            read -e -p "$(INFO "请输入新的缓存时间值: ")" new_ttl
+            for file_url in "${selected_files[@]}"; do
+                yml_name=$(basename "$file_url")
+                sed -ri "s/ttl: 168h/ttl: ${new_ttl}/g" ${PROXY_DIR}/${yml_name} &>/dev/null
+            done
+            break
+        done
+    fi
+}
+
+START_NEW_DOCKER_SERVICE() {
+if [ -d "${PROXY_DIR}" ]; then
+    if [ -f "${PROXY_DIR}/${DOCKER_COMPOSE_FILE}" ]; then      
+        START_NEW_SERVER_CONFIG_FILES
+        START_NEW_SERVER_DOWN_CONFIG
+        PROXY_HTTP
+        INFO "正在启动新的容器服务,请稍等..."
+        docker-compose -f "${PROXY_DIR}/${DOCKER_COMPOSE_FILE}" up -d "${selected_names[@]}"
+        if [ $? -ne 0 ]; then
+            WARN "${selected_names[*]} ${LIGHT_YELLOW}服务启动失败${RESET},请排查!"         
+        else
+            INFO "${selected_names[*]} ${LIGHT_GREEN}服务启动完成${RESET}"
+        fi
+    else
+        WARN "${LIGHT_YELLOW}文件${PROXY_DIR}/${DOCKER_COMPOSE_FILE} 不存在，无法启动新的容器！${RESET}"
+    fi
+else
+    WARN "${LIGHT_YELLOW}目录 ${PROXY_DIR} 不存在，无法启动新的容器！${RESET}"
+fi
+}
+### 启动新容器 END
 
 SEPARATOR "服务管理"
 echo -e "1) ${BOLD}${LIGHT_GREEN}重启${RESET}服务"
 echo -e "2) ${BOLD}${LIGHT_CYAN}更新${RESET}服务"
 echo -e "3) ${BOLD}${LIGHT_MAGENTA}查看${RESET}日志"
 echo -e "4) ${BOLD}${LIGHT_BLUE}缓存${RESET}时效"
-echo -e "5) ${BOLD}返回${LIGHT_RED}主菜单${RESET}"
+echo -e "5) ${BOLD}启动${CYAN}新服务${RESET}"
+echo -e "6) ${BOLD}返回${LIGHT_RED}主菜单${RESET}"
 echo -e "0) ${BOLD}退出脚本${RESET}"
 echo "---------------------------------------------------------------"
 read -e -p "$(INFO "输入${LIGHT_CYAN}对应数字${RESET}并按${LIGHT_GREEN}Enter${RESET}键 > ")" ser_choice
@@ -2320,16 +2475,20 @@ case $ser_choice in
         SVC_MGMT
         ;;
     4)
-        MODIFY_SERVICE_CONFIG
+        MODIFY_SERVICE_TTL_CONFIG
         if [ ${#selected_services[@]} -eq 0 ]; then
             ERROR "修改的服务未运行,请重新选择"
-            MODIFY_SERVICE_CONFIG
+            MODIFY_SERVICE_TTL_CONFIG
         else
             docker-compose restart ${selected_services[*]}
         fi
         SVC_MGMT
         ;;
     5)
+        START_NEW_DOCKER_SERVICE
+        SVC_MGMT
+        ;;
+    6)
         main_menu
         ;;
     0)
@@ -2378,7 +2537,11 @@ INSTALL_OR_UPDATE_CMD() {
             WARN "正在安装脚本中,请稍等..."
         else
             WARN "正在进行脚本更新,请稍等..."
+            if [ -f "$TARGET_PATH" ]; then
+                rm -f "$TARGET_PATH" &>/dev/null
+            fi
         fi
+        
         wget -q -O "$TARGET_PATH" "$DOWNLOAD_URL" &>/dev/null
         if [ $? -eq 0 ]; then
             success=true
@@ -2585,6 +2748,7 @@ services=(
 container_names=$(docker ps --filter "name=reg-" --filter "status=running" --format "{{.Names}}")
 
 auth_containers=()
+non_auth_containers=()
 
 for container_name in $container_names; do
     specified_name=${services[$container_name]}
@@ -2593,6 +2757,8 @@ for container_name in $container_names; do
     fi
     if docker exec $container_name grep -q "auth" /etc/distribution/config.yml; then
         auth_containers+=("$specified_name")
+    else
+        non_auth_containers+=("$specified_name")
     fi
 done
 
@@ -2600,6 +2766,12 @@ if [ ${#auth_containers[@]} -gt 0 ]; then
     INFO "当前运行的 Docker 容器中${LIGHT_GREEN}包含认证${RESET}的容器有: ${LIGHT_CYAN}${auth_containers[*]}${RESET}"
 else
     WARN "当前运行的 Docker 容器中${LIGHT_YELLOW}没有包含认证${RESET}的容器"
+fi
+
+if [ ${#non_auth_containers[@]} -gt 0 ]; then
+    WARN "当前运行的 Docker 容器中${LIGHT_YELLOW}没有包含认证${RESET}的容器有: ${LIGHT_BLUE}${non_auth_containers[*]}${RESET}"
+else
+    INFO "当前运行的 Docker 容器中${LIGHT_GREEN}所有容器都包含认证${RESET}"
 fi
 }
 
@@ -2836,7 +3008,7 @@ case $auth_choice in
     1)
         ENABLE_AUTH
         if [ ${#selected_services[@]} -eq 0 ]; then
-            WARN "没有运行任何选择的服务，请${LIGHT_CYAN}重新选择运行${RESET}的服务"
+            WARN "退出认证授权，请${LIGHT_CYAN}重新选择${RESET}服务认证的操作"
             AUTH_SERVICE_CONFIG # 没有服务运行调用函数
         else
             docker-compose down ${selected_services[*]}
@@ -2847,7 +3019,7 @@ case $auth_choice in
     2)
         DELETE_AUTH
         if [ ${#selected_services[@]} -eq 0 ]; then
-            WARN "没有运行任何选择的服务，请${LIGHT_CYAN}重新选择运行${RESET}的服务"
+            WARN "退出认证授权，请${LIGHT_CYAN}重新选择${RESET}服务认证的操作"
             AUTH_SERVICE_CONFIG # 没有服务运行调用函数
         else
             docker-compose down ${selected_services[*]}
