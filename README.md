@@ -6,7 +6,7 @@
   <p align="center">
   <img src="https://github.com/dqzboy/Docker-Proxy/assets/42825450/c187d66f-152e-4172-8268-e54bd77d48bb" width="230px" height="200px">
       <br>
-      <i>自建Docker镜像加速服务，基于官方 registry 一键部署Docker、K8s、Quay、Ghcr、Mcr、elastic等镜像加速\管理服务.</i>
+      <i>自建Docker镜像加速服务，基于官方 registry 一键部署Docker、K8s、Quay、Ghcr、Mcr、elastic、nvcr等镜像加速\管理服务.</i>
   </p>
 </div>
 
@@ -29,7 +29,7 @@
 ## 📝 准备工作
 ⚠️  **重要**：选择一台国外服务器，并且未被墙。对于域名，无需进行国内备案。你也可以通过一些平台申请免费域名。在一键部署过程中，如果选择安装Caddy，它将自动配置HTTPS。若选择部署Nginx服务，则需要自行申请一个免费的SSL证书，或者通过其他方式来实现SSL加密。
 
-> 高性价比海外VPS: [点击查看](Ad/README.md) 
+> **高性价比海外 VP 推荐**：[点击查看](https://dqzboy.github.io/proxyui/racknerd) 
 
 <details>
 <summary><strong>免费域名证书申请</strong></summary>
@@ -61,7 +61,7 @@
    
 > 点击图片跳转
    
-<a href ="https://www.dqzboy.com/17834.html"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Blog-Image/BlogCourse/docker-proxy-vip.png"></a>
+<a href ="https://www.dqzboy.com/17834.html"><img src="https://cdn.jsdelivr.net/gh/dqzboy/Blog-Image/BlogCourse/DockerProxy.png"></a>
 </details>
 
 </details>
@@ -123,7 +123,11 @@ bash -c "$(curl -fsSL https://cdn.jsdelivr.net/gh/dqzboy/Docker-Proxy/install/Do
 
 **3.** 执行 `docker compose` 或 `docker-compose` 命令启动容器服务
 ```shell
+# 启动全部容器
 docker compose up -d
+
+# 启动指定的容器,例如: Docker Hub Registry Proxy
+docker compose up -d dockerhub
 
 # 查看容器日志
 docker logs -f [容器ID或名称]
@@ -140,12 +144,13 @@ docker logs -f [容器ID或名称]
 - [x] 自动检查并安装所需的依赖软件，如Docker\Compose、Nginx\Caddy等，并确保系统环境满足运行要求
 - [x] 根据你所选择部署的WEB反代服务，自动渲染对应的Nginx或Caddy服务配置
 - [x] 自动清理注册表上传目录中的那些不再被任何镜像或清单引用的文件
-- [x] 支持自定义配置代理缓存时间(PROXY_TTL)
+- [x] 支持自定义配置代理缓存时间(PROXY_TTL)、支持配置IP黑白名单，防止恶意攻击行为
 - [x] 提供了服务管理、配置管理、服务卸载、认证授权等功能，方便用户进行日常管理和维护
 - [x] 支持一键配置本机Docker代理和容器服务代理(HTTP_PROXY)，仅支持http
 - [x] 支持国内服务器一键部署，解决国内环境无法安装Docker\Compose服务难题
 - [x] 支持主流Linux发行版操作系统,例如Centos、Ubuntu、Rocky、Debian、Rhel等
 - [x] 支持主流ARCH架构下部署，包括linux/amd64、linux/arm64
+- [x] 针对本项目开发Docker Registry管理面板，实现镜像搜索、广告展示、文档教程、容器管理、容器监控告警、网络测试等功能
 
 ## ✨ 教程
 #### 配置Nginx反向代理
@@ -190,6 +195,7 @@ docker pull gcr.your_domain_name/google-containers/pause:3.1
 | quay.io     | quay.your_domain_name  | Quay Container Registry
 | mcr.microsoft.com     | mcr.your_domain_name  | Microsoft Container Registry
 | docker.elastic.co     | elastic.your_domain_name  | Elastic Stack
+| nvcr.io    | nvcr.your_domain_name  | NVIDIA Container Registry
 
 ---
 
@@ -210,7 +216,7 @@ docker pull gcr.your_domain_name/google-containers/pause:3.1
     </tr>
 </table>
 
-## 💻 UI
+## 💻 UI界面
 
 > HubCMD-UI 手动安装教程：[点击查看教程](hubcmdui/README.md)
 
@@ -222,7 +228,15 @@ docker pull gcr.your_domain_name/google-containers/pause:3.1
     </tr>
     <tr>
         <td width="50%" align="center"><img src="https://github.com/dqzboy/Docker-Proxy/assets/42825450/0ddb041b-64f6-4d93-b5bf-85ad3b53d0e0?raw=true"></td>
-        <td width="50%" align="center"><img src="https://github.com/user-attachments/assets/2efe5d7e-6542-4867-9e50-17fa0e704b23?raw=true"></td>
+        <td width="50%" align="center"><img src="https://github.com/user-attachments/assets/c7e368ca-7f1a-4311-9a10-a5f4f06d86d8?raw=true"></td>
+    </tr>
+    <tr>
+      <td width="50%" align="center"><b>Docker官方镜像搜索</b></td>
+      <td width="50%" align="center"><b>Docker容器服务管理</b></td>
+    </tr>
+    <tr>
+        <td width="50%" align="center"><img src="https://github.com/user-attachments/assets/8569c5c4-4ce6-4cd4-8547-fa9816019049?raw=true"></td>
+        <td width="50%" align="center"><img src="https://github.com/user-attachments/assets/fb30f747-a2af-4fc8-b3cc-05c71a044da0?raw=true"></td>
     </tr>
 </table>
 

@@ -37,7 +37,7 @@ health:
     threshold: 3
 
 proxy:
-  remoteurl: https://mcr.microsoft.com
+  remoteurl: https://nvcr.io
   username: 
   password:
   ttl: 168h

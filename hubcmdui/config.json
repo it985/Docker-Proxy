@@ -26,5 +26,13 @@
       "link": "https://www.dqzboy.com/17834.html"
     }
   ],
-  "proxyDomain": "dqzboy.github.io"
+  "proxyDomain": "dqzboy.github.io",
+  "monitoringConfig": {
+    "notificationType": "telegram",
+    "webhookUrl": "",
+    "telegramToken": "",
+    "telegramChatId": "",
+    "monitorInterval": 60,
+    "isEnabled": true
+  }
 }
